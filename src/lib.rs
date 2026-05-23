@@ -8,3 +8,4 @@ pub mod ir;
 pub mod parse;
 pub mod spacing;
 pub mod svg;
+pub(crate) mod widget;
