@@ -256,14 +256,42 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
                 },
             },
         },
-        Child {
-            offset: Point {
-                x: surd_w,
-                y: body_y,
-            },
-            child: body_box,
-        },
     ];
+
+    // Vertical connector: when the surd glyph's bounding box top sits below
+    // the overline (parent_height > surd_h), there is a visible gap between
+    // the surd's hook/peak and the start of the vinculum. Bridge it with a
+    // thin vertical rule aligned to the right edge of the surd, spanning from
+    // `rule_y` (top of overline) down to `surd_y` (top of surd bbox) with a
+    // small overlap to avoid hairline seams. Mirrors KaTeX's approach of
+    // extending the surd stem to meet the vinculum.
+    if surd_y > rule_y {
+        let overlap = rule_thickness;
+        let connector_h = surd_y - rule_y + overlap;
+        let connector_x = (surd_w - rule_thickness).max(0.0);
+        children.push(Child {
+            offset: Point {
+                x: connector_x,
+                y: rule_y,
+            },
+            child: Box {
+                width: rule_thickness,
+                height: connector_h,
+                depth: 0.0,
+                kind: BoxKind::Rule {
+                    thickness: connector_h,
+                },
+            },
+        });
+    }
+
+    children.push(Child {
+        offset: Point {
+            x: surd_w,
+            y: body_y,
+        },
+        child: body_box,
+    });
 
     // Degree (n in \sqrt[n]{x}) — placed above-left of the surd's lower point.
     // We shift every existing child rightward by the degree's width + the
@@ -584,10 +612,17 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     // enough by LMM that ascenders/descenders don't cross the rule.)
     let parent_height = shift_up + n.height;
     let parent_depth = shift_down + d.depth;
-    let width = n.width.max(d.width);
+    // Horizontal overhang: the rule extends slightly past the wider of
+    // num/den on each side, ensuring the bar remains visible (and visually
+    // anchored) even when both children are very narrow (e.g. \frac{1}{2}).
+    // KaTeX uses ~0.05em of nulldelimiterspace-ish padding per side; we
+    // approximate with 2× rule thickness, which scales naturally with style.
+    let overhang = rule_thickness * 2.0;
+    let content_width = n.width.max(d.width);
+    let width = content_width + 2.0 * overhang;
 
-    let num_x = (width - n.width) / 2.0;
-    let den_x = (width - d.width) / 2.0;
+    let num_x = overhang + (content_width - n.width) / 2.0;
+    let den_x = overhang + (content_width - d.width) / 2.0;
 
     let axis_y = parent_height;
     let num_baseline_y = axis_y - shift_up;
