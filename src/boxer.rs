@@ -85,6 +85,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
             style,
         ),
         Node::Radical { degree, body } => layout_radical(degree.as_deref(), body, style),
+        Node::Fenced { open, close, body } => layout_fenced(*open, *close, body, style),
         Node::Error(_) => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
         _ => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
     }
@@ -230,6 +231,70 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
         depth: parent_depth,
         kind: BoxKind::HBox(children),
     }
+}
+
+/// Layout `\left<open> body \right<close>`. The open/close glyphs are sized
+/// via MATH vertical variants to span the body's ink height. `GlyphId(0)` is
+/// the invisible-delimiter sentinel (LaTeX `.`) and is rendered as a zero-width
+/// empty box.
+fn layout_fenced(
+    open: ttf_parser::GlyphId,
+    close: ttf_parser::GlyphId,
+    body: &Node,
+    style: Style,
+) -> Box {
+    use crate::font;
+
+    let body_box = layout(body, style);
+    let base_size = approx_font_size_from_box(&body_box);
+    let body_total_du =
+        (body_box.height + body_box.depth) / base_size * font::units_per_em();
+
+    fn pick_variant(base: ttf_parser::GlyphId, target_du: f32) -> ttf_parser::GlyphId {
+        if base.0 == 0 {
+            return base;
+        }
+        font::math_variant_vertical(base, target_du)
+            .map(|(g, _)| g)
+            .unwrap_or(base)
+    }
+    let open_id = pick_variant(open, body_total_du);
+    let close_id = pick_variant(close, body_total_du);
+
+    fn glyph_box(id: ttf_parser::GlyphId, size: f32) -> Box {
+        if id.0 == 0 {
+            return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+        }
+        let m = font::glyph_metrics(id, size);
+        Box {
+            width: m.advance,
+            height: m.height,
+            depth: m.depth,
+            kind: BoxKind::Glyph { glyph_id: id, font_size: size },
+        }
+    }
+    let open_box = glyph_box(open_id, base_size);
+    let close_box = glyph_box(close_id, base_size);
+
+    let parent_height = body_box
+        .height
+        .max(open_box.height)
+        .max(close_box.height);
+    let parent_depth = body_box
+        .depth
+        .max(open_box.depth)
+        .max(close_box.depth);
+
+    let mut children = Vec::new();
+    let mut x = 0.0;
+    for b in [open_box, body_box, close_box] {
+        let w = b.width;
+        let h = b.height;
+        children.push(Child { offset: Point { x, y: parent_height - h }, child: b });
+        x += w;
+    }
+
+    Box { width: x, height: parent_height, depth: parent_depth, kind: BoxKind::HBox(children) }
 }
 
 fn layout_with_limits(
