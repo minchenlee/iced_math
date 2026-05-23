@@ -1,0 +1,7 @@
+---
+source: tests/pixel_snapshots.rs
+expression: png
+input_file: tests/corpus/30_alpha_eq_beta.tex
+extension: png
+snapshot_kind: binary
+---
