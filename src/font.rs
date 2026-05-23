@@ -158,9 +158,14 @@ pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
 }
 
 /// Find the smallest vertical glyph variant whose advance measurement is
-/// `>= target_design_units`. Returns `(variant_glyph_id, advance_in_design_units)`
-/// or `None` if the glyph has no `MathVariants` entry, or none of its variants
-/// reach the target size.
+/// `>= target_design_units`. If no variant reaches that size, return the
+/// **largest available** variant instead — so callers asking for huge
+/// delimiters (e.g. around a triple-stacked fraction) still get the biggest
+/// glyph the font can provide, rather than silently falling back to the base
+/// glyph via `unwrap_or(base)`.
+///
+/// Returns `None` only when the glyph has no `MathVariants` construction entry
+/// (i.e. it's not a stretchy glyph in this font).
 ///
 /// v0.1 ignores `GlyphAssembly` (extensible glyphs built from parts) — that is
 /// deferred to v0.2.
@@ -168,12 +173,18 @@ pub fn math_variant_vertical(base: GlyphId, target_design_units: f32) -> Option<
     let math = face().tables().math?;
     let variants = math.variants?;
     let construction = variants.vertical_constructions.get(base)?;
+    let mut largest: Option<(GlyphId, f32)> = None;
     for v in construction.variants {
-        if v.advance_measurement as f32 >= target_design_units {
-            return Some((v.variant_glyph, v.advance_measurement as f32));
+        let adv = v.advance_measurement as f32;
+        if adv >= target_design_units {
+            return Some((v.variant_glyph, adv));
+        }
+        match largest {
+            Some((_, h)) if h >= adv => {}
+            _ => largest = Some((v.variant_glyph, adv)),
         }
     }
-    None
+    largest
 }
 
 /// Emit the glyph's outline as an SVG path data string in font design units (y-up).
