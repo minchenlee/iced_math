@@ -5,6 +5,7 @@
 
 use pulldown_latex::event::{Content, DelimiterType, Event, Grouping, ScriptType, Visual};
 use pulldown_latex::{Parser, Storage};
+use ttf_parser::GlyphId;
 
 use crate::font;
 use crate::ir::{AtomClass, Node, Style};
@@ -76,8 +77,21 @@ fn parse_element(
             let inner = parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
         }
+        Event::Begin(Grouping::LeftRight(open_opt, close_opt)) => {
+            let inner = parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+            // v0.1: base glyph IDs only — boxer will swap to vertical variants
+            // sized to body height. `\left.`/`\right.` (None) → GlyphId(0) sentinel,
+            // which the boxer treats as no-op (invisible delimiter).
+            let open = delim_glyph(open_opt);
+            let close = delim_glyph(close_opt);
+            Ok(Some(Node::Fenced {
+                open,
+                close,
+                body: Box::new(Node::Row(inner)),
+            }))
+        }
         Event::Begin(_) => {
-            // Other groupings (LeftRight, environments) — handled in later tasks.
+            // Other groupings (environments) — handled in later tasks.
             // For now, consume to matching End to keep stream balanced.
             let inner = parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
@@ -198,6 +212,13 @@ fn large_op_node(
     // display too, but for v0.1 we keep the simple rule).
     let limits = big;
     Ok(Node::Op { glyph, limits, big, font_size: size })
+}
+
+/// Resolve a `\left`/`\right` delimiter char to a base GlyphId.
+/// `None` (LaTeX null delim `.`) and unmapped chars both fall back to
+/// `GlyphId(0)`, the sentinel the boxer treats as an invisible delimiter.
+fn delim_glyph(ch: Option<char>) -> GlyphId {
+    ch.and_then(font::glyph_id).unwrap_or(GlyphId(0))
 }
 
 fn atom_node(ch: char, class: AtomClass, font_size: f32) -> Result<Node, ParseError> {
