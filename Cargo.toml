@@ -23,3 +23,7 @@ criterion = "0.5"
 [lib]
 name = "iced_math"
 path = "src/lib.rs"
+
+[[bench]]
+name = "pipeline"
+harness = false
