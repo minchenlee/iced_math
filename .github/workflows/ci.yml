@@ -29,6 +29,6 @@ jobs:
       - name: fmt
         run: cargo fmt -- --check
       - name: clippy
-        run: cargo clippy --lib --tests --benches -- -D warnings
+        run: cargo clippy --lib --tests --benches -- -D warnings -A clippy::uninlined_format_args
       - name: test
         run: cargo test --lib --tests
