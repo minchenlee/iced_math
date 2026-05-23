@@ -26,3 +26,26 @@ pub fn has_math_table() -> bool {
 pub fn glyph_id(ch: char) -> Option<GlyphId> {
     face().glyph_index(ch)
 }
+
+/// Pixel-space metrics for a glyph at a given font size.
+/// All values are in SVG-down y space; `height` is above baseline, `depth` below.
+#[derive(Debug, Clone, Copy)]
+pub struct GlyphMetrics {
+    pub advance: f32,
+    pub height: f32,
+    pub depth: f32,
+}
+
+pub fn glyph_metrics(id: GlyphId, font_size: f32) -> GlyphMetrics {
+    let face = face();
+    let upem = face.units_per_em() as f32;
+    let scale = font_size / upem;
+
+    let advance = face.glyph_hor_advance(id).unwrap_or(0) as f32 * scale;
+    let bbox = face.glyph_bounding_box(id);
+    let (height, depth) = match bbox {
+        Some(b) => (b.y_max as f32 * scale, (-(b.y_min as f32)) * scale),
+        None => (0.0, 0.0),
+    };
+    GlyphMetrics { advance, height, depth }
+}
