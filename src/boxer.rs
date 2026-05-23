@@ -265,6 +265,34 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
         },
     ];
 
+    // Vertical connector: when the surd glyph's bounding box top sits below
+    // the overline (parent_height > surd.height ⇒ surd_y > rule_y), there is
+    // a visible gap between the surd's hook/peak and the start of the
+    // vinculum. Bridge it with a thin vertical rule aligned to the right
+    // edge of the surd, spanning from `rule_y` (top of overline) down past
+    // `surd_y` (top of surd bbox) with a small overlap to avoid hairline
+    // seams. Mirrors KaTeX's approach of extending the surd stem to meet
+    // the vinculum.
+    if surd_y > rule_y {
+        let overlap = rule_thickness;
+        let connector_h = (surd_y - rule_y) + overlap;
+        let connector_x = (surd_w - rule_thickness).max(0.0);
+        children.push(Child {
+            offset: Point {
+                x: connector_x,
+                y: rule_y,
+            },
+            child: Box {
+                width: rule_thickness,
+                height: connector_h,
+                depth: 0.0,
+                kind: BoxKind::Rule {
+                    thickness: connector_h,
+                },
+            },
+        });
+    }
+
     // Degree (n in \sqrt[n]{x}) — placed above-left of the surd's lower point.
     // We shift every existing child rightward by the degree's width + the
     // RadicalKernAfterDegree kern, then place the degree at x=0. Without this
