@@ -170,8 +170,34 @@ fn content_to_node(c: Content, font_size: f32, style: Style) -> Result<Node, Par
             atom_node(content, class, size)
         }
         Content::Punctuation(ch) => atom_node(ch, AtomClass::Punct, size),
-        Content::LargeOp { content, .. } => atom_node(content, AtomClass::Op, size),
+        Content::LargeOp { content, small } => large_op_node(content, small, font_size, style),
     }
+}
+
+fn large_op_node(
+    ch: char,
+    small: bool,
+    font_size: f32,
+    style: Style,
+) -> Result<Node, ParseError> {
+    let size = style.font_size(font_size);
+    let base_glyph = font::glyph_id(ch)
+        .ok_or_else(|| ParseError(format!("no glyph for {ch:?} (U+{:04X})", ch as u32)))?;
+    // `big` = pick the larger MATH variant. Display mode triggers it, unless
+    // the operator is forced small (e.g. \smallint, \tsum).
+    let big = style.is_display() && !small;
+    let glyph = if big {
+        font::math_variant_vertical(base_glyph, 1500.0)
+            .map(|(g, _)| g)
+            .unwrap_or(base_glyph)
+    } else {
+        base_glyph
+    };
+    // v0.1: `limits` follows display mode for large ops (matches LaTeX default
+    // for \sum, \prod, \int's siblings — \int is conventionally non-limits in
+    // display too, but for v0.1 we keep the simple rule).
+    let limits = big;
+    Ok(Node::Op { glyph, limits, big, font_size: size })
 }
 
 fn atom_node(ch: char, class: AtomClass, font_size: f32) -> Result<Node, ParseError> {
