@@ -7,3 +7,4 @@ pub mod font;
 pub mod ir;
 pub mod parse;
 pub mod spacing;
+pub mod svg;
