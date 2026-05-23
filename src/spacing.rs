@@ -10,8 +10,8 @@ use crate::ir::AtomClass;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Spacing {
     None,
-    Thin, // 3mu
-    Med,  // 4mu
+    Thin,  // 3mu
+    Med,   // 4mu
     Thick, // 5mu
 }
 
@@ -51,14 +51,15 @@ const T: [[Spacing; 8]; 8] = {
     use Spacing::*;
     [
         //               Ord    Op     Bin    Rel    Open   Close  Punct  Inner
-        /* Ord   */ [None,  Thin,  Med,   Thick, None,  None,  None,  Thin ],
-        /* Op    */ [Thin,  Thin,  None,  Thick, None,  None,  None,  Thin ],
-        /* Bin   */ [Med,   Med,   None,  None,  Med,   None,  None,  Med  ],
-        /* Rel   */ [Thick, Thick, None,  None,  Thick, None,  None,  Thick],
-        /* Open  */ [None,  None,  None,  None,  None,  None,  None,  None ],
-        /* Close */ [None,  Thin,  Med,   Thick, None,  None,  None,  Thin ],
-        /* Punct */ [Thin,  Thin,  None,  Thin,  Thin,  Thin,  Thin,  Thin ],
-        /* Inner */ [Thin,  Thin,  Med,   Thick, Thin,  None,  Thin,  Thin ],
+        /* Ord   */
+        [None, Thin, Med, Thick, None, None, None, Thin],
+        /* Op    */ [Thin, Thin, None, Thick, None, None, None, Thin],
+        /* Bin   */ [Med, Med, None, None, Med, None, None, Med],
+        /* Rel   */ [Thick, Thick, None, None, Thick, None, None, Thick],
+        /* Open  */ [None, None, None, None, None, None, None, None],
+        /* Close */ [None, Thin, Med, Thick, None, None, None, Thin],
+        /* Punct */ [Thin, Thin, None, Thin, Thin, Thin, Thin, Thin],
+        /* Inner */ [Thin, Thin, Med, Thick, Thin, None, Thin, Thin],
     ]
 };
 

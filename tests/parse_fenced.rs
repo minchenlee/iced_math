@@ -8,7 +8,12 @@ fn parses_left_right_paren() {
     let ir = parse::to_ir(r"\left( x \right)", 16.0, Style::Text).unwrap();
     let Node::Row(items) = ir else { panic!() };
     assert_eq!(items.len(), 1);
-    let Node::Fenced { open: _, close: _, body } = &items[0] else {
+    let Node::Fenced {
+        open: _,
+        close: _,
+        body,
+    } = &items[0]
+    else {
         panic!("expected Fenced")
     };
     assert!(matches!(body.as_ref(), Node::Row(_)));

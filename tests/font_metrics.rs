@@ -16,5 +16,9 @@ fn metrics_scale_linearly_with_size() {
     let m1 = font::glyph_metrics(id, 10.0);
     let m2 = font::glyph_metrics(id, 20.0);
     let ratio = m2.advance / m1.advance;
-    assert!((ratio - 2.0).abs() < 1e-3, "expected 2.0 ratio, got {}", ratio);
+    assert!(
+        (ratio - 2.0).abs() < 1e-3,
+        "expected 2.0 ratio, got {}",
+        ratio
+    );
 }

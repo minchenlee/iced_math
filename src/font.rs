@@ -9,9 +9,7 @@ use crate::FONT_BYTES;
 
 fn face() -> &'static Face<'static> {
     static FACE: OnceLock<Face<'static>> = OnceLock::new();
-    FACE.get_or_init(|| {
-        Face::parse(FONT_BYTES, 0).expect("bundled math font must parse")
-    })
+    FACE.get_or_init(|| Face::parse(FONT_BYTES, 0).expect("bundled math font must parse"))
 }
 
 pub fn units_per_em() -> f32 {
@@ -48,7 +46,11 @@ pub fn glyph_metrics(id: GlyphId, font_size: f32) -> GlyphMetrics {
         Some(b) => (b.y_max as f32 * scale, (-(b.y_min as f32)) * scale),
         None => (0.0, 0.0),
     };
-    GlyphMetrics { advance, height, depth }
+    GlyphMetrics {
+        advance,
+        height,
+        depth,
+    }
 }
 
 struct PathBuilder(String);
@@ -114,17 +116,19 @@ pub enum MathConstant {
 pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
     let face = face();
     let scale = font_size / face.units_per_em() as f32;
-    let Some(math) = face.tables().math else { return 0.0 };
-    let Some(consts) = math.constants else { return 0.0 };
+    let Some(math) = face.tables().math else {
+        return 0.0;
+    };
+    let Some(consts) = math.constants else {
+        return 0.0;
+    };
     use MathConstant::*;
     let value: i16 = match c {
         AxisHeight => consts.axis_height().value,
         FractionNumeratorShiftUp => consts.fraction_numerator_shift_up().value,
         FractionDenominatorShiftDown => consts.fraction_denominator_shift_down().value,
         FractionRuleThickness => consts.fraction_rule_thickness().value,
-        FractionNumDisplayStyleShiftUp => {
-            consts.fraction_numerator_display_style_shift_up().value
-        }
+        FractionNumDisplayStyleShiftUp => consts.fraction_numerator_display_style_shift_up().value,
         FractionDenomDisplayStyleShiftDown => {
             consts.fraction_denominator_display_style_shift_down().value
         }
@@ -136,9 +140,7 @@ pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
         SuperscriptBottomMin => consts.superscript_bottom_min().value,
         SuperscriptBaselineDropMax => consts.superscript_baseline_drop_max().value,
         SubSuperscriptGapMin => consts.sub_superscript_gap_min().value,
-        SuperscriptBottomMaxWithSubscript => {
-            consts.superscript_bottom_max_with_subscript().value
-        }
+        SuperscriptBottomMaxWithSubscript => consts.superscript_bottom_max_with_subscript().value,
         RadicalRuleThickness => consts.radical_rule_thickness().value,
         RadicalVerticalGap => consts.radical_vertical_gap().value,
         RadicalDisplayStyleVerticalGap => consts.radical_display_style_vertical_gap().value,
@@ -162,10 +164,7 @@ pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
 ///
 /// v0.1 ignores `GlyphAssembly` (extensible glyphs built from parts) — that is
 /// deferred to v0.2.
-pub fn math_variant_vertical(
-    base: GlyphId,
-    target_design_units: f32,
-) -> Option<(GlyphId, f32)> {
+pub fn math_variant_vertical(base: GlyphId, target_design_units: f32) -> Option<(GlyphId, f32)> {
     let math = face().tables().math?;
     let variants = math.variants?;
     let construction = variants.vertical_constructions.get(base)?;

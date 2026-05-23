@@ -25,7 +25,13 @@ pub fn to_ir(src: &str, font_size: f32, style: Style) -> Result<Node, ParseError
     }
 
     let mut cursor = 0usize;
-    let row = parse_until_end(&events, &mut cursor, font_size, style, /* in_group */ false)?;
+    let row = parse_until_end(
+        &events,
+        &mut cursor,
+        font_size,
+        style,
+        /* in_group */ false,
+    )?;
     Ok(Node::Row(row))
 }
 
@@ -74,11 +80,13 @@ fn parse_element(
     match ev {
         Event::Content(c) => Ok(Some(content_to_node(c, font_size, style)?)),
         Event::Begin(Grouping::Normal) => {
-            let inner = parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+            let inner =
+                parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
         }
         Event::Begin(Grouping::LeftRight(open_opt, close_opt)) => {
-            let inner = parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+            let inner =
+                parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
             // v0.1: base glyph IDs only — boxer will swap to vertical variants
             // sized to body height. `\left.`/`\right.` (None) → GlyphId(0) sentinel,
             // which the boxer treats as no-op (invisible delimiter).
@@ -93,7 +101,8 @@ fn parse_element(
         Event::Begin(_) => {
             // Other groupings (environments) — handled in later tasks.
             // For now, consume to matching End to keep stream balanced.
-            let inner = parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+            let inner =
+                parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
         }
         Event::End => Err(ParseError("unexpected End outside group".into())),
@@ -119,7 +128,11 @@ fn parse_element(
                     (Some(Box::new(sb)), Some(Box::new(sp)))
                 }
             };
-            Ok(Some(Node::Subsup { base: Box::new(base), sub, sup }))
+            Ok(Some(Node::Subsup {
+                base: Box::new(base),
+                sub,
+                sup,
+            }))
         }
         Event::Visual(v) => match v {
             Visual::Fraction(_) => {
@@ -188,12 +201,7 @@ fn content_to_node(c: Content, font_size: f32, style: Style) -> Result<Node, Par
     }
 }
 
-fn large_op_node(
-    ch: char,
-    small: bool,
-    font_size: f32,
-    style: Style,
-) -> Result<Node, ParseError> {
+fn large_op_node(ch: char, small: bool, font_size: f32, style: Style) -> Result<Node, ParseError> {
     let size = style.font_size(font_size);
     let base_glyph = font::glyph_id(ch)
         .ok_or_else(|| ParseError(format!("no glyph for {ch:?} (U+{:04X})", ch as u32)))?;
@@ -211,7 +219,12 @@ fn large_op_node(
     // for \sum, \prod, \int's siblings — \int is conventionally non-limits in
     // display too, but for v0.1 we keep the simple rule).
     let limits = big;
-    Ok(Node::Op { glyph, limits, big, font_size: size })
+    Ok(Node::Op {
+        glyph,
+        limits,
+        big,
+        font_size: size,
+    })
 }
 
 /// Resolve a `\left`/`\right` delimiter char to a base GlyphId.
@@ -224,7 +237,11 @@ fn delim_glyph(ch: Option<char>) -> GlyphId {
 fn atom_node(ch: char, class: AtomClass, font_size: f32) -> Result<Node, ParseError> {
     let glyph = font::glyph_id(ch)
         .ok_or_else(|| ParseError(format!("no glyph for {ch:?} (U+{:04X})", ch as u32)))?;
-    Ok(Node::Atom { class, glyph, font_size })
+    Ok(Node::Atom {
+        class,
+        glyph,
+        font_size,
+    })
 }
 
 fn chars_to_node<I: Iterator<Item = char>>(

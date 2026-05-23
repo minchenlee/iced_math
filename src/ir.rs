@@ -4,13 +4,36 @@ use ttf_parser::GlyphId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
-    Atom { class: AtomClass, glyph: GlyphId, font_size: f32 },
-    Frac { num: Box<Node>, den: Box<Node> },
-    Subsup { base: Box<Node>, sub: Option<Box<Node>>, sup: Option<Box<Node>> },
-    Radical { degree: Option<Box<Node>>, body: Box<Node> },
+    Atom {
+        class: AtomClass,
+        glyph: GlyphId,
+        font_size: f32,
+    },
+    Frac {
+        num: Box<Node>,
+        den: Box<Node>,
+    },
+    Subsup {
+        base: Box<Node>,
+        sub: Option<Box<Node>>,
+        sup: Option<Box<Node>>,
+    },
+    Radical {
+        degree: Option<Box<Node>>,
+        body: Box<Node>,
+    },
     Row(Vec<Node>),
-    Fenced { open: GlyphId, close: GlyphId, body: Box<Node> },
-    Op { glyph: GlyphId, limits: bool, big: bool, font_size: f32 },
+    Fenced {
+        open: GlyphId,
+        close: GlyphId,
+        body: Box<Node>,
+    },
+    Op {
+        glyph: GlyphId,
+        limits: bool,
+        big: bool,
+        font_size: f32,
+    },
     Space(SpaceKind),
     /// Sentinel for parse error — boxer emits red-monospace fallback.
     Error(String),
@@ -18,12 +41,22 @@ pub enum Node {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AtomClass {
-    Ord, Op, Bin, Rel, Open, Close, Punct, Inner,
+    Ord,
+    Op,
+    Bin,
+    Rel,
+    Open,
+    Close,
+    Punct,
+    Inner,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpaceKind {
-    Thin, Med, Thick, NegThin,
+    Thin,
+    Med,
+    Thick,
+    NegThin,
     /// Width supplied in design-unit-style multiplier (mu = 1/18 em). 6mu = thin, 4mu = med-neg, etc.
     Mu(f32),
 }
@@ -37,7 +70,9 @@ pub enum Style {
 }
 
 impl Style {
-    pub fn is_display(self) -> bool { matches!(self, Style::Display) }
+    pub fn is_display(self) -> bool {
+        matches!(self, Style::Display)
+    }
     pub fn sub(self) -> Self {
         match self {
             Style::Display | Style::Text => Style::Script,

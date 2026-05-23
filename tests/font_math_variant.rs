@@ -8,7 +8,10 @@ fn integral_has_bigger_variant() {
     // we skip past the self-entry to a genuinely bigger glyph.
     let (variant, advance) = font::math_variant_vertical(id, 1500.0)
         .expect("integral must have a bigger vertical variant");
-    assert!(variant != id, "should return a different glyph for bigger size");
+    assert!(
+        variant != id,
+        "should return a different glyph for bigger size"
+    );
     assert!(advance >= 1500.0);
 }
 

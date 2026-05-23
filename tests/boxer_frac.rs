@@ -6,10 +6,7 @@ fn frac_height_exceeds_num_height_alone() {
         &parse::to_ir(r"\frac{1}{2}", 16.0, Style::Text).unwrap(),
         Style::Text,
     );
-    let one = boxer::layout(
-        &parse::to_ir("1", 16.0, Style::Text).unwrap(),
-        Style::Text,
-    );
+    let one = boxer::layout(&parse::to_ir("1", 16.0, Style::Text).unwrap(), Style::Text);
     assert!(
         half.height > one.height,
         "frac should be taller than just the numerator"
@@ -30,10 +27,7 @@ fn frac_width_at_least_max_of_num_den() {
         &parse::to_ir("abc", 16.0, Style::Text).unwrap(),
         Style::Text,
     );
-    let den = boxer::layout(
-        &parse::to_ir("de", 16.0, Style::Text).unwrap(),
-        Style::Text,
-    );
+    let den = boxer::layout(&parse::to_ir("de", 16.0, Style::Text).unwrap(), Style::Text);
     assert!(f.width >= num.width.max(den.width));
 }
 

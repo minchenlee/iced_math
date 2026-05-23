@@ -12,7 +12,8 @@ pub fn emit(root: &MBox) -> Vec<u8> {
     let _ = write!(
         &mut out,
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">"#,
-        w = w, h = h
+        w = w,
+        h = h
     );
     walk(&mut out, root, Point { x: 0.0, y: 0.0 });
     out.push_str("</svg>");
@@ -21,7 +22,10 @@ pub fn emit(root: &MBox) -> Vec<u8> {
 
 fn walk(out: &mut String, b: &MBox, origin: Point) {
     match &b.kind {
-        BoxKind::Glyph { glyph_id, font_size } => {
+        BoxKind::Glyph {
+            glyph_id,
+            font_size,
+        } => {
             let s = font_size / font::units_per_em();
             let path_d = font::outline_path(*glyph_id);
             if path_d.is_empty() {
@@ -57,7 +61,10 @@ fn walk(out: &mut String, b: &MBox, origin: Point) {
                 walk(
                     out,
                     child,
-                    Point { x: origin.x + offset.x, y: origin.y + offset.y },
+                    Point {
+                        x: origin.x + offset.x,
+                        y: origin.y + offset.y,
+                    },
                 );
             }
         }

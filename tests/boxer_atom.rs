@@ -18,7 +18,10 @@ fn ab_is_wider_than_a() {
 #[test]
 fn aplusb_wider_than_ab_due_to_med_spacing() {
     let ab = boxer::layout(&parse::to_ir("ab", 16.0, Style::Text).unwrap(), Style::Text);
-    let aplus = boxer::layout(&parse::to_ir("a+b", 16.0, Style::Text).unwrap(), Style::Text);
+    let aplus = boxer::layout(
+        &parse::to_ir("a+b", 16.0, Style::Text).unwrap(),
+        Style::Text,
+    );
     assert!(
         aplus.width > ab.width,
         "a+b should be wider than ab due to Med spacing around +"

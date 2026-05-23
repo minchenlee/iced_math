@@ -1,4 +1,7 @@
-use iced_math::{parse, ir::{Node, Style}};
+use iced_math::{
+    ir::{Node, Style},
+    parse,
+};
 
 #[test]
 fn parses_superscript() {
@@ -16,7 +19,9 @@ fn parses_superscript() {
 fn parses_subscript() {
     let ir = parse::to_ir("a_i", 16.0, Style::Text).unwrap();
     let Node::Row(items) = ir else { panic!() };
-    let Node::Subsup { sub, sup, .. } = &items[0] else { panic!() };
+    let Node::Subsup { sub, sup, .. } = &items[0] else {
+        panic!()
+    };
     assert!(sub.is_some());
     assert!(sup.is_none());
 }
@@ -25,7 +30,9 @@ fn parses_subscript() {
 fn parses_both_sub_and_sup() {
     let ir = parse::to_ir("a_i^j", 16.0, Style::Text).unwrap();
     let Node::Row(items) = ir else { panic!() };
-    let Node::Subsup { sub, sup, .. } = &items[0] else { panic!() };
+    let Node::Subsup { sub, sup, .. } = &items[0] else {
+        panic!()
+    };
     assert!(sub.is_some() && sup.is_some());
 }
 
@@ -33,7 +40,9 @@ fn parses_both_sub_and_sup() {
 fn parses_braced_exponent() {
     let ir = parse::to_ir("x^{n+1}", 16.0, Style::Text).unwrap();
     let Node::Row(items) = ir else { panic!() };
-    let Node::Subsup { sup: Some(sup), .. } = &items[0] else { panic!() };
+    let Node::Subsup { sup: Some(sup), .. } = &items[0] else {
+        panic!()
+    };
     let Node::Row(inner) = sup.as_ref() else {
         panic!("expected Row inside exponent, got {:?}", sup)
     };

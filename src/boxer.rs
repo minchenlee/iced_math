@@ -46,10 +46,15 @@ pub struct Box {
 
 #[derive(Debug, Clone)]
 pub enum BoxKind {
-    Glyph { glyph_id: ttf_parser::GlyphId, font_size: f32 },
+    Glyph {
+        glyph_id: ttf_parser::GlyphId,
+        font_size: f32,
+    },
     HBox(Vec<Child>),
     VBox(Vec<Child>),
-    Rule { thickness: f32 },
+    Rule {
+        thickness: f32,
+    },
     Empty,
 }
 
@@ -67,40 +72,47 @@ pub struct Point {
 
 pub fn layout(node: &Node, style: Style) -> Box {
     match node {
-        Node::Atom { glyph, font_size, .. } => {
+        Node::Atom {
+            glyph, font_size, ..
+        } => {
             let m = font::glyph_metrics(*glyph, *font_size);
             Box {
                 width: m.advance,
                 height: m.height,
                 depth: m.depth,
-                kind: BoxKind::Glyph { glyph_id: *glyph, font_size: *font_size },
+                kind: BoxKind::Glyph {
+                    glyph_id: *glyph,
+                    font_size: *font_size,
+                },
             }
         }
         Node::Row(items) => layout_row(items, style),
         Node::Frac { num, den } => layout_frac(num, den, style),
-        Node::Subsup { base, sub, sup } => layout_subsup(
-            base,
-            sub.as_deref(),
-            sup.as_deref(),
-            style,
-        ),
+        Node::Subsup { base, sub, sup } => {
+            layout_subsup(base, sub.as_deref(), sup.as_deref(), style)
+        }
         Node::Radical { degree, body } => layout_radical(degree.as_deref(), body, style),
         Node::Fenced { open, close, body } => layout_fenced(*open, *close, body, style),
         Node::Op { .. } => layout_op(node, style),
-        Node::Error(_) => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
-        _ => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
+        Node::Error(_) => Box {
+            width: 0.0,
+            height: 0.0,
+            depth: 0.0,
+            kind: BoxKind::Empty,
+        },
+        _ => Box {
+            width: 0.0,
+            height: 0.0,
+            depth: 0.0,
+            kind: BoxKind::Empty,
+        },
     }
 }
 
 /// Layout `base` with optional sub/superscripts. If `base` is a big operator
 /// flagged with `limits: true`, stack scripts vertically (see [`layout_with_limits`]);
 /// otherwise place scripts to the right of `base`, sized down by [`Style::sub`].
-fn layout_subsup(
-    base: &Node,
-    sub: Option<&Node>,
-    sup: Option<&Node>,
-    style: Style,
-) -> Box {
+fn layout_subsup(base: &Node, sub: Option<&Node>, sup: Option<&Node>, style: Style) -> Box {
     use crate::font::{math_constant, MathConstant};
 
     // Limits branch: stack scripts above/below big-op base.
@@ -132,7 +144,10 @@ fn layout_subsup(
     let mut children = Vec::new();
     // Base: baseline aligns with parent baseline.
     children.push(Child {
-        offset: Point { x: 0.0, y: parent_height - b_height },
+        offset: Point {
+            x: 0.0,
+            y: parent_height - b_height,
+        },
         child: b,
     });
 
@@ -140,17 +155,34 @@ fn layout_subsup(
         let sup_baseline_y = parent_height - sup_shift;
         let sup_top = sup_baseline_y - sup_box.height;
         max_w = max_w.max(scripts_x + sup_box.width);
-        children.push(Child { offset: Point { x: scripts_x, y: sup_top }, child: sup_box });
+        children.push(Child {
+            offset: Point {
+                x: scripts_x,
+                y: sup_top,
+            },
+            child: sup_box,
+        });
     }
     if let Some(sub_box) = s_sub {
         let sub_baseline_y = parent_height + sub_shift;
         let sub_top = sub_baseline_y - sub_box.height;
         max_w = max_w.max(scripts_x + sub_box.width);
-        children.push(Child { offset: Point { x: scripts_x, y: sub_top }, child: sub_box });
+        children.push(Child {
+            offset: Point {
+                x: scripts_x,
+                y: sub_top,
+            },
+            child: sub_box,
+        });
     }
 
     let _ = b_width; // base width is captured in scripts_x already
-    Box { width: max_w, height: parent_height, depth: parent_depth, kind: BoxKind::HBox(children) }
+    Box {
+        width: max_w,
+        height: parent_height,
+        depth: parent_depth,
+        kind: BoxKind::HBox(children),
+    }
 }
 
 /// Layout `\sqrt{body}` or `\sqrt[degree]{body}`. Uses the surd glyph (U+221A)
@@ -170,8 +202,7 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
     };
 
     let surd_base = font::glyph_id('√').expect("√ must exist in math font");
-    let needed_design_units = (body_box.height + body_box.depth + gap + rule_thickness)
-        / base_size
+    let needed_design_units = (body_box.height + body_box.depth + gap + rule_thickness) / base_size
         * font::units_per_em();
     let surd_id = font::math_variant_vertical(surd_base, needed_design_units)
         .map(|(g, _)| g)
@@ -182,7 +213,10 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
         width: surd_m.advance,
         height: surd_m.height,
         depth: surd_m.depth,
-        kind: BoxKind::Glyph { glyph_id: surd_id, font_size: base_size },
+        kind: BoxKind::Glyph {
+            glyph_id: surd_id,
+            font_size: base_size,
+        },
     };
 
     let surd_w = surd_box.width;
@@ -201,17 +235,31 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
     let surd_y = parent_height - surd_box.height;
 
     let mut children = vec![
-        Child { offset: Point { x: 0.0, y: surd_y }, child: surd_box },
         Child {
-            offset: Point { x: surd_w, y: rule_y },
+            offset: Point { x: 0.0, y: surd_y },
+            child: surd_box,
+        },
+        Child {
+            offset: Point {
+                x: surd_w,
+                y: rule_y,
+            },
             child: Box {
                 width: body_w,
                 height: rule_thickness,
                 depth: 0.0,
-                kind: BoxKind::Rule { thickness: rule_thickness },
+                kind: BoxKind::Rule {
+                    thickness: rule_thickness,
+                },
             },
         },
-        Child { offset: Point { x: surd_w, y: body_y }, child: body_box },
+        Child {
+            offset: Point {
+                x: surd_w,
+                y: body_y,
+            },
+            child: body_box,
+        },
     ];
 
     // Degree (n in \sqrt[n]{x}) — placed above-left of the surd's lower point.
@@ -222,7 +270,10 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
         let deg_y = (parent_height - (surd_h * raise_pct) - deg_h).max(0.0);
         children.insert(
             0,
-            Child { offset: Point { x: 0.0, y: deg_y }, child: deg_box },
+            Child {
+                offset: Point { x: 0.0, y: deg_y },
+                child: deg_box,
+            },
         );
     }
 
@@ -248,8 +299,7 @@ fn layout_fenced(
 
     let body_box = layout(body, style);
     let base_size = approx_font_size_from_box(&body_box);
-    let body_total_du =
-        (body_box.height + body_box.depth) / base_size * font::units_per_em();
+    let body_total_du = (body_box.height + body_box.depth) / base_size * font::units_per_em();
 
     fn pick_variant(base: ttf_parser::GlyphId, target_du: f32) -> ttf_parser::GlyphId {
         if base.0 == 0 {
@@ -264,61 +314,80 @@ fn layout_fenced(
 
     fn glyph_box(id: ttf_parser::GlyphId, size: f32) -> Box {
         if id.0 == 0 {
-            return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+            return Box {
+                width: 0.0,
+                height: 0.0,
+                depth: 0.0,
+                kind: BoxKind::Empty,
+            };
         }
         let m = font::glyph_metrics(id, size);
         Box {
             width: m.advance,
             height: m.height,
             depth: m.depth,
-            kind: BoxKind::Glyph { glyph_id: id, font_size: size },
+            kind: BoxKind::Glyph {
+                glyph_id: id,
+                font_size: size,
+            },
         }
     }
     let open_box = glyph_box(open_id, base_size);
     let close_box = glyph_box(close_id, base_size);
 
-    let parent_height = body_box
-        .height
-        .max(open_box.height)
-        .max(close_box.height);
-    let parent_depth = body_box
-        .depth
-        .max(open_box.depth)
-        .max(close_box.depth);
+    let parent_height = body_box.height.max(open_box.height).max(close_box.height);
+    let parent_depth = body_box.depth.max(open_box.depth).max(close_box.depth);
 
     let mut children = Vec::new();
     let mut x = 0.0;
     for b in [open_box, body_box, close_box] {
         let w = b.width;
         let h = b.height;
-        children.push(Child { offset: Point { x, y: parent_height - h }, child: b });
+        children.push(Child {
+            offset: Point {
+                x,
+                y: parent_height - h,
+            },
+            child: b,
+        });
         x += w;
     }
 
-    Box { width: x, height: parent_height, depth: parent_depth, kind: BoxKind::HBox(children) }
+    Box {
+        width: x,
+        height: parent_height,
+        depth: parent_depth,
+        kind: BoxKind::HBox(children),
+    }
 }
 
 /// Layout a bare big-op (e.g. `\sum`, `\int`) as a single glyph box.
 fn layout_op(node: &Node, _style: Style) -> Box {
-    let Node::Op { glyph, font_size, .. } = node else {
-        return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+    let Node::Op {
+        glyph, font_size, ..
+    } = node
+    else {
+        return Box {
+            width: 0.0,
+            height: 0.0,
+            depth: 0.0,
+            kind: BoxKind::Empty,
+        };
     };
     let m = crate::font::glyph_metrics(*glyph, *font_size);
     Box {
         width: m.advance,
         height: m.height,
         depth: m.depth,
-        kind: BoxKind::Glyph { glyph_id: *glyph, font_size: *font_size },
+        kind: BoxKind::Glyph {
+            glyph_id: *glyph,
+            font_size: *font_size,
+        },
     }
 }
 
 /// Stack sub/sup limits vertically above/below a big-op base (display mode).
-fn layout_with_limits(
-    base: &Node,
-    sub: Option<&Node>,
-    sup: Option<&Node>,
-    style: Style,
-) -> Box {
+fn layout_with_limits(base: &Node, sub: Option<&Node>, sup: Option<&Node>, style: Style) -> Box {
     use crate::font::{math_constant, MathConstant};
 
     let b = layout_op(base, style);
@@ -341,13 +410,24 @@ fn layout_with_limits(
         .max(s_sup.as_ref().map(|s| s.width).unwrap_or(0.0))
         .max(s_sub.as_ref().map(|s| s.width).unwrap_or(0.0));
 
-    let parent_height = if s_sup.is_some() { b_h + upper_gap + sup_total } else { b_h };
-    let parent_depth = if s_sub.is_some() { b_d + lower_gap + sub_total } else { b_d };
+    let parent_height = if s_sup.is_some() {
+        b_h + upper_gap + sup_total
+    } else {
+        b_h
+    };
+    let parent_depth = if s_sub.is_some() {
+        b_d + lower_gap + sub_total
+    } else {
+        b_d
+    };
 
     let base_top = parent_height - b_h;
     let base_x = (width - b_w) / 2.0;
     let mut children = vec![Child {
-        offset: Point { x: base_x, y: base_top },
+        offset: Point {
+            x: base_x,
+            y: base_top,
+        },
         child: b,
     }];
 
@@ -357,7 +437,10 @@ fn layout_with_limits(
         let sup_top = base_top - upper_gap - sup_total_h;
         let sup_x = (width - sup_w) / 2.0;
         children.push(Child {
-            offset: Point { x: sup_x, y: sup_top.max(0.0) },
+            offset: Point {
+                x: sup_x,
+                y: sup_top.max(0.0),
+            },
             child: sup_box,
         });
     }
@@ -366,19 +449,30 @@ fn layout_with_limits(
         let sub_top = parent_height + b_d + lower_gap;
         let sub_x = (width - sub_w) / 2.0;
         children.push(Child {
-            offset: Point { x: sub_x, y: sub_top },
+            offset: Point {
+                x: sub_x,
+                y: sub_top,
+            },
             child: sub_box,
         });
     }
 
-    Box { width, height: parent_height, depth: parent_depth, kind: BoxKind::VBox(children) }
+    Box {
+        width,
+        height: parent_height,
+        depth: parent_depth,
+        kind: BoxKind::VBox(children),
+    }
 }
 
 fn layout_row(items: &[Node], style: Style) -> Box {
     use crate::spacing;
 
     // Pass 1: lay out children + horizontal cursor, accumulating max height/depth.
-    struct Placed { x: f32, b: Box }
+    struct Placed {
+        x: f32,
+        b: Box,
+    }
     let mut placed: Vec<Placed> = Vec::new();
     let mut cursor = 0.0_f32;
     let mut height: f32 = 0.0;
@@ -408,11 +502,19 @@ fn layout_row(items: &[Node], style: Style) -> Box {
         .into_iter()
         .map(|p| {
             let y = height - p.b.height;
-            Child { offset: Point { x: p.x, y }, child: p.b }
+            Child {
+                offset: Point { x: p.x, y },
+                child: p.b,
+            }
         })
         .collect();
 
-    Box { width: cursor, height, depth, kind: BoxKind::HBox(children) }
+    Box {
+        width: cursor,
+        height,
+        depth,
+        kind: BoxKind::HBox(children),
+    }
 }
 
 /// Layout `\frac{num}{den}`. The resulting box's **baseline coincides with
@@ -473,17 +575,34 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     let rule_top = axis_y - rule_thickness / 2.0;
 
     let children = vec![
-        Child { offset: Point { x: num_x, y: num_top }, child: n },
         Child {
-            offset: Point { x: 0.0, y: rule_top },
+            offset: Point {
+                x: num_x,
+                y: num_top,
+            },
+            child: n,
+        },
+        Child {
+            offset: Point {
+                x: 0.0,
+                y: rule_top,
+            },
             child: Box {
                 width,
                 height: rule_thickness,
                 depth: 0.0,
-                kind: BoxKind::Rule { thickness: rule_thickness },
+                kind: BoxKind::Rule {
+                    thickness: rule_thickness,
+                },
             },
         },
-        Child { offset: Point { x: den_x, y: den_top }, child: d },
+        Child {
+            offset: Point {
+                x: den_x,
+                y: den_top,
+            },
+            child: d,
+        },
     ];
 
     Box {
