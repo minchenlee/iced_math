@@ -266,11 +266,22 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
     ];
 
     // Degree (n in \sqrt[n]{x}) — placed above-left of the surd's lower point.
+    // We shift every existing child rightward by the degree's width + the
+    // RadicalKernAfterDegree kern, then place the degree at x=0. Without this
+    // shift, a wide degree (e.g. `\sqrt[12345]{x}`) overlaps the surd and
+    // extends past the parent box's reported width, causing SVG clipping.
+    let mut total_width = surd_w + body_w;
     if let Some(deg) = degree {
         let deg_box = layout(deg, Style::ScriptScript);
+        let kern_after = math_constant(MathConstant::RadicalKernAfterDegree, base_size).max(0.0);
         let raise_pct = math_constant(MathConstant::RadicalDegreeBottomRaisePercent, base_size);
         let deg_h = deg_box.height;
         let deg_y = (parent_height - (surd_h * raise_pct) - deg_h).max(0.0);
+        let shift = deg_box.width + kern_after;
+        for ch in &mut children {
+            ch.offset.x += shift;
+        }
+        let deg_w = deg_box.width;
         children.insert(
             0,
             Child {
@@ -278,10 +289,12 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
                 child: deg_box,
             },
         );
+        total_width = shift + surd_w + body_w;
+        let _ = deg_w;
     }
 
     Box {
-        width: surd_w + body_w,
+        width: total_width,
         height: parent_height,
         depth: parent_depth,
         kind: BoxKind::HBox(children),
