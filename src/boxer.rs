@@ -553,7 +553,8 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     // its content's base font_size — NOT the children's actual (sub-styled)
     // rendered size. Otherwise rule thickness, shifts etc. shrink along with
     // the inner glyphs and the fraction looks anemic.
-    let base_content = approx_base_font_size_from_node(num).max(approx_base_font_size_from_node(den));
+    let base_content =
+        approx_base_font_size_from_node(num).max(approx_base_font_size_from_node(den));
     let base = style.font_size(base_content);
     let rule_thickness = math_constant(MathConstant::FractionRuleThickness, base).max(0.5);
 
