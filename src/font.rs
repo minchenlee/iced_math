@@ -2,6 +2,7 @@
 
 use std::sync::OnceLock;
 use ttf_parser::Face;
+pub use ttf_parser::GlyphId;
 
 use crate::FONT_BYTES;
 
@@ -18,4 +19,10 @@ pub fn units_per_em() -> f32 {
 
 pub fn has_math_table() -> bool {
     face().tables().math.is_some()
+}
+
+/// Look up the glyph ID for a Unicode codepoint via the font's cmap.
+/// Returns `None` if the codepoint is not present in the font.
+pub fn glyph_id(ch: char) -> Option<GlyphId> {
+    face().glyph_index(ch)
 }
