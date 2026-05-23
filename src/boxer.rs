@@ -84,6 +84,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
             sup.as_deref(),
             style,
         ),
+        Node::Radical { degree, body } => layout_radical(degree.as_deref(), body, style),
         Node::Error(_) => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
         _ => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
     }
@@ -148,6 +149,87 @@ fn layout_subsup(
 
     let _ = b_width; // base width is captured in scripts_x already
     Box { width: max_w, height: parent_height, depth: parent_depth, kind: BoxKind::HBox(children) }
+}
+
+/// Layout `\sqrt{body}` or `\sqrt[degree]{body}`. Uses the surd glyph (U+221A)
+/// scaled up via MATH vertical variants to span the body's height; rule
+/// (vinculum) extends across the body.
+fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
+    use crate::font::{self, math_constant, MathConstant};
+
+    let body_box = layout(body, style);
+    let base_size = approx_font_size_from_box(&body_box);
+
+    let rule_thickness = math_constant(MathConstant::RadicalRuleThickness, base_size).max(0.5);
+    let gap = if style.is_display() {
+        math_constant(MathConstant::RadicalDisplayStyleVerticalGap, base_size)
+    } else {
+        math_constant(MathConstant::RadicalVerticalGap, base_size)
+    };
+
+    let surd_base = font::glyph_id('√').expect("√ must exist in math font");
+    let needed_design_units = (body_box.height + body_box.depth + gap + rule_thickness)
+        / base_size
+        * font::units_per_em();
+    let surd_id = font::math_variant_vertical(surd_base, needed_design_units)
+        .map(|(g, _)| g)
+        .unwrap_or(surd_base);
+    let surd_m = font::glyph_metrics(surd_id, base_size);
+
+    let surd_box = Box {
+        width: surd_m.advance,
+        height: surd_m.height,
+        depth: surd_m.depth,
+        kind: BoxKind::Glyph { glyph_id: surd_id, font_size: base_size },
+    };
+
+    let surd_w = surd_box.width;
+    let surd_h = surd_box.height + surd_box.depth;
+    let body_w = body_box.width;
+    let body_h = body_box.height;
+    let body_d = body_box.depth;
+
+    // Total vertical extent above baseline: at least rule + gap + body.height.
+    let inner_ascent = rule_thickness + gap + body_h;
+    let parent_height = surd_box.height.max(inner_ascent);
+    let parent_depth = body_d.max(surd_box.depth);
+
+    let rule_y = parent_height - body_h - gap - rule_thickness;
+    let body_y = parent_height - body_h;
+    let surd_y = parent_height - surd_box.height;
+
+    let mut children = vec![
+        Child { offset: Point { x: 0.0, y: surd_y }, child: surd_box },
+        Child {
+            offset: Point { x: surd_w, y: rule_y },
+            child: Box {
+                width: body_w,
+                height: rule_thickness,
+                depth: 0.0,
+                kind: BoxKind::Rule { thickness: rule_thickness },
+            },
+        },
+        Child { offset: Point { x: surd_w, y: body_y }, child: body_box },
+    ];
+
+    // Degree (n in \sqrt[n]{x}) — placed above-left of the surd's lower point.
+    if let Some(deg) = degree {
+        let deg_box = layout(deg, Style::ScriptScript);
+        let raise_pct = math_constant(MathConstant::RadicalDegreeBottomRaisePercent, base_size);
+        let deg_h = deg_box.height;
+        let deg_y = (parent_height - (surd_h * raise_pct) - deg_h).max(0.0);
+        children.insert(
+            0,
+            Child { offset: Point { x: 0.0, y: deg_y }, child: deg_box },
+        );
+    }
+
+    Box {
+        width: surd_w + body_w,
+        height: parent_height,
+        depth: parent_depth,
+        kind: BoxKind::HBox(children),
+    }
 }
 
 fn layout_with_limits(
