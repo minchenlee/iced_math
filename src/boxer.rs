@@ -86,6 +86,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
         ),
         Node::Radical { degree, body } => layout_radical(degree.as_deref(), body, style),
         Node::Fenced { open, close, body } => layout_fenced(*open, *close, body, style),
+        Node::Op { .. } => layout_op(node, style),
         Node::Error(_) => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
         _ => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
     }
@@ -297,14 +298,80 @@ fn layout_fenced(
     Box { width: x, height: parent_height, depth: parent_depth, kind: BoxKind::HBox(children) }
 }
 
+/// Layout a bare big-op (e.g. `\sum`, `\int`) as a single glyph box.
+fn layout_op(node: &Node, _style: Style) -> Box {
+    let Node::Op { glyph, font_size, .. } = node else {
+        return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+    };
+    let m = crate::font::glyph_metrics(*glyph, *font_size);
+    Box {
+        width: m.advance,
+        height: m.height,
+        depth: m.depth,
+        kind: BoxKind::Glyph { glyph_id: *glyph, font_size: *font_size },
+    }
+}
+
+/// Stack sub/sup limits vertically above/below a big-op base (display mode).
 fn layout_with_limits(
-    _base: &Node,
-    _sub: Option<&Node>,
-    _sup: Option<&Node>,
-    _style: Style,
+    base: &Node,
+    sub: Option<&Node>,
+    sup: Option<&Node>,
+    style: Style,
 ) -> Box {
-    // Wired in subtask 18d.
-    Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty }
+    use crate::font::{math_constant, MathConstant};
+
+    let b = layout_op(base, style);
+    let script_style = style.sub();
+    let s_sup = sup.map(|n| layout(n, script_style));
+    let s_sub = sub.map(|n| layout(n, script_style));
+
+    let base_size = approx_font_size_from_box(&b);
+    let upper_gap = math_constant(MathConstant::UpperLimitGapMin, base_size);
+    let lower_gap = math_constant(MathConstant::LowerLimitGapMin, base_size);
+
+    let sup_total = s_sup.as_ref().map(|s| s.height + s.depth).unwrap_or(0.0);
+    let sub_total = s_sub.as_ref().map(|s| s.height + s.depth).unwrap_or(0.0);
+
+    let b_w = b.width;
+    let b_h = b.height;
+    let b_d = b.depth;
+
+    let width = b_w
+        .max(s_sup.as_ref().map(|s| s.width).unwrap_or(0.0))
+        .max(s_sub.as_ref().map(|s| s.width).unwrap_or(0.0));
+
+    let parent_height = if s_sup.is_some() { b_h + upper_gap + sup_total } else { b_h };
+    let parent_depth = if s_sub.is_some() { b_d + lower_gap + sub_total } else { b_d };
+
+    let base_top = parent_height - b_h;
+    let base_x = (width - b_w) / 2.0;
+    let mut children = vec![Child {
+        offset: Point { x: base_x, y: base_top },
+        child: b,
+    }];
+
+    if let Some(sup_box) = s_sup {
+        let sup_w = sup_box.width;
+        let sup_total_h = sup_box.height + sup_box.depth;
+        let sup_top = base_top - upper_gap - sup_total_h;
+        let sup_x = (width - sup_w) / 2.0;
+        children.push(Child {
+            offset: Point { x: sup_x, y: sup_top.max(0.0) },
+            child: sup_box,
+        });
+    }
+    if let Some(sub_box) = s_sub {
+        let sub_w = sub_box.width;
+        let sub_top = parent_height + b_d + lower_gap;
+        let sub_x = (width - sub_w) / 2.0;
+        children.push(Child {
+            offset: Point { x: sub_x, y: sub_top },
+            child: sub_box,
+        });
+    }
+
+    Box { width, height: parent_height, depth: parent_depth, kind: BoxKind::VBox(children) }
 }
 
 fn layout_row(items: &[Node], style: Style) -> Box {
