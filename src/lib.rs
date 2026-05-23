@@ -3,3 +3,4 @@
 pub(crate) static FONT_BYTES: &[u8] = include_bytes!("../assets/LatinModernMath.otf");
 
 pub mod font;
+pub mod ir;
