@@ -3,7 +3,7 @@
 //! v0.1 Task 10: atoms.
 //! v0.1 Task 11: sub/superscripts with group-aware element reading.
 
-use pulldown_latex::event::{Content, DelimiterType, Event, Grouping, ScriptType};
+use pulldown_latex::event::{Content, DelimiterType, Event, Grouping, ScriptType, Visual};
 use pulldown_latex::{Parser, Storage};
 
 use crate::font;
@@ -107,11 +107,40 @@ fn parse_element(
             };
             Ok(Some(Node::Subsup { base: Box::new(base), sub, sup }))
         }
-        // v0.1 future tasks: Visual (frac/sqrt/negation), Space, StateChange, EnvironmentFlow.
-        // Consume but produce nothing for now.
-        Event::Visual(_) | Event::Space { .. } | Event::StateChange(_) | Event::EnvironmentFlow(_) => {
-            Ok(None)
-        }
+        Event::Visual(v) => match v {
+            Visual::Fraction(_) => {
+                let num = parse_element(events, cursor, font_size, style)?
+                    .ok_or_else(|| ParseError("fraction numerator produced no node".into()))?;
+                let den = parse_element(events, cursor, font_size, style)?
+                    .ok_or_else(|| ParseError("fraction denominator produced no node".into()))?;
+                Ok(Some(Node::Frac {
+                    num: Box::new(num),
+                    den: Box::new(den),
+                }))
+            }
+            Visual::SquareRoot => {
+                let body = parse_element(events, cursor, font_size, style)?
+                    .ok_or_else(|| ParseError("sqrt body produced no node".into()))?;
+                Ok(Some(Node::Radical {
+                    degree: None,
+                    body: Box::new(body),
+                }))
+            }
+            Visual::Root => {
+                // pulldown-latex order: radicand then index.
+                let body = parse_element(events, cursor, font_size, style)?
+                    .ok_or_else(|| ParseError("root radicand produced no node".into()))?;
+                let degree = parse_element(events, cursor, font_size, style)?
+                    .ok_or_else(|| ParseError("root index produced no node".into()))?;
+                Ok(Some(Node::Radical {
+                    degree: Some(Box::new(degree)),
+                    body: Box::new(body),
+                }))
+            }
+            Visual::Negation => Ok(None),
+        },
+        // v0.1 future tasks: Space, StateChange, EnvironmentFlow. Consume but produce nothing.
+        Event::Space { .. } | Event::StateChange(_) | Event::EnvironmentFlow(_) => Ok(None),
     }
 }
 
