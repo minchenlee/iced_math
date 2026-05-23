@@ -172,7 +172,10 @@ fn parse_element(
 }
 
 fn content_to_node(c: Content, font_size: f32, style: Style) -> Result<Node, ParseError> {
-    let size = style.font_size(font_size);
+    // Note: we store the BASE font_size on Node::Atom / Node::Op (not
+    // style-scaled). The boxer applies `style.font_size(base)` at layout time
+    // so script-style atoms actually render at script-scale glyph metrics.
+    let size = font_size;
     // Most content variants produce a single atom; string-bearing variants
     // (Number, Text, Function) wrap multiple atoms in a Row.
     match c {
@@ -202,7 +205,8 @@ fn content_to_node(c: Content, font_size: f32, style: Style) -> Result<Node, Par
 }
 
 fn large_op_node(ch: char, small: bool, font_size: f32, style: Style) -> Result<Node, ParseError> {
-    let size = style.font_size(font_size);
+    // Store the BASE font_size; boxer applies style scaling at layout time.
+    let size = font_size;
     let base_glyph = font::glyph_id(ch)
         .ok_or_else(|| ParseError(format!("no glyph for {ch:?} (U+{:04X})", ch as u32)))?;
     // `big` = pick the larger MATH variant. Display mode triggers it, unless

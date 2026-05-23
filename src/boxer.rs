@@ -75,14 +75,17 @@ pub fn layout(node: &Node, style: Style) -> Box {
         Node::Atom {
             glyph, font_size, ..
         } => {
-            let m = font::glyph_metrics(*glyph, *font_size);
+            // `font_size` is the BASE size (e.g. 16.0); apply style scaling here
+            // so script-position atoms render at script-scale glyph metrics.
+            let actual = style.font_size(*font_size);
+            let m = font::glyph_metrics(*glyph, actual);
             Box {
                 width: m.advance,
                 height: m.height,
                 depth: m.depth,
                 kind: BoxKind::Glyph {
                     glyph_id: *glyph,
-                    font_size: *font_size,
+                    font_size: actual,
                 },
             }
         }
@@ -124,7 +127,7 @@ fn layout_subsup(base: &Node, sub: Option<&Node>, sup: Option<&Node>, style: Sty
     let script_style = style.sub();
     let s_sup = sup.map(|n| layout(n, script_style));
     let s_sub = sub.map(|n| layout(n, script_style));
-    let base_size = approx_font_size_from_box(&b);
+    let base_size = style.font_size(approx_base_font_size_from_node(base));
 
     let sup_shift = math_constant(MathConstant::SuperscriptShiftUp, base_size);
     let sub_shift = math_constant(MathConstant::SubscriptShiftDown, base_size);
@@ -192,7 +195,7 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
     use crate::font::{self, math_constant, MathConstant};
 
     let body_box = layout(body, style);
-    let base_size = approx_font_size_from_box(&body_box);
+    let base_size = style.font_size(approx_base_font_size_from_node(body));
 
     let rule_thickness = math_constant(MathConstant::RadicalRuleThickness, base_size).max(0.5);
     let gap = if style.is_display() {
@@ -298,7 +301,7 @@ fn layout_fenced(
     use crate::font;
 
     let body_box = layout(body, style);
-    let base_size = approx_font_size_from_box(&body_box);
+    let base_size = style.font_size(approx_base_font_size_from_node(body));
     let body_total_du = (body_box.height + body_box.depth) / base_size * font::units_per_em();
 
     fn pick_variant(base: ttf_parser::GlyphId, target_du: f32) -> ttf_parser::GlyphId {
@@ -362,7 +365,7 @@ fn layout_fenced(
 }
 
 /// Layout a bare big-op (e.g. `\sum`, `\int`) as a single glyph box.
-fn layout_op(node: &Node, _style: Style) -> Box {
+fn layout_op(node: &Node, style: Style) -> Box {
     let Node::Op {
         glyph, font_size, ..
     } = node
@@ -374,14 +377,16 @@ fn layout_op(node: &Node, _style: Style) -> Box {
             kind: BoxKind::Empty,
         };
     };
-    let m = crate::font::glyph_metrics(*glyph, *font_size);
+    // `font_size` is the BASE size; apply style scaling for correct glyph metrics.
+    let actual = style.font_size(*font_size);
+    let m = crate::font::glyph_metrics(*glyph, actual);
     Box {
         width: m.advance,
         height: m.height,
         depth: m.depth,
         kind: BoxKind::Glyph {
             glyph_id: *glyph,
-            font_size: *font_size,
+            font_size: actual,
         },
     }
 }
@@ -485,7 +490,7 @@ fn layout_row(items: &[Node], style: Style) -> Box {
         let cur_class = atom_class(node);
         if let (Some(pc), Some(cc)) = (prev_class, cur_class) {
             let sp = spacing::between(pc, cc, display_or_text);
-            cursor += sp.to_px(approx_font_size(node));
+            cursor += sp.to_px(style.font_size(approx_font_size(node)));
         }
         let b = layout(node, style);
         height = height.max(b.height);
@@ -531,9 +536,12 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     let n = layout(num, inner_style);
     let d = layout(den, inner_style);
 
-    // Use the larger of the two children's font size as the base for MATH
-    // constant scaling (a reasonable approximation in v0.1).
-    let base = approx_font_size_from_box(&n).max(approx_font_size_from_box(&d));
+    // Base size for MATH constants is the fraction's outer style applied to
+    // its content's base font_size — NOT the children's actual (sub-styled)
+    // rendered size. Otherwise rule thickness, shifts etc. shrink along with
+    // the inner glyphs and the fraction looks anemic.
+    let base_content = approx_base_font_size_from_node(num).max(approx_base_font_size_from_node(den));
+    let base = style.font_size(base_content);
     let rule_thickness = math_constant(MathConstant::FractionRuleThickness, base).max(0.5);
 
     let (shift_up, shift_down) = if style.is_display() {
@@ -613,6 +621,8 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     }
 }
 
+/// Walks a Box tree to find a representative leaf-glyph font_size.
+/// Returned values are **actual rendered** sizes (style scaling already applied).
 fn approx_font_size_from_box(b: &Box) -> f32 {
     match &b.kind {
         BoxKind::Glyph { font_size, .. } => *font_size,
@@ -620,6 +630,26 @@ fn approx_font_size_from_box(b: &Box) -> f32 {
             .first()
             .map(|x| approx_font_size_from_box(&x.child))
             .unwrap_or(16.0),
+        _ => 16.0,
+    }
+}
+
+/// Walks a Node tree to find a representative **base** font_size (i.e. the
+/// unscaled size stored on Atom/Op nodes). Use this when computing MATH
+/// constants for a layout that operates on a node and needs the base size of
+/// its content — independent of whatever sub-style its children may use
+/// internally (e.g. fraction internals stepping down to Script style).
+fn approx_base_font_size_from_node(n: &Node) -> f32 {
+    match n {
+        Node::Atom { font_size, .. } | Node::Op { font_size, .. } => *font_size,
+        Node::Row(items) => items
+            .first()
+            .map(approx_base_font_size_from_node)
+            .unwrap_or(16.0),
+        Node::Frac { num, .. } => approx_base_font_size_from_node(num),
+        Node::Subsup { base, .. } => approx_base_font_size_from_node(base),
+        Node::Radical { body, .. } => approx_base_font_size_from_node(body),
+        Node::Fenced { body, .. } => approx_base_font_size_from_node(body),
         _ => 16.0,
     }
 }

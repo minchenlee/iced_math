@@ -19,16 +19,27 @@ fn frac_height_exceeds_num_height_alone() {
 
 #[test]
 fn frac_width_at_least_max_of_num_den() {
+    // Fraction children are laid out at sub-style (Script), so compare against
+    // num/den rendered at Script style, not at the fraction's outer Text style.
     let f = boxer::layout(
         &parse::to_ir(r"\frac{abc}{de}", 16.0, Style::Text).unwrap(),
         Style::Text,
     );
     let num = boxer::layout(
         &parse::to_ir("abc", 16.0, Style::Text).unwrap(),
-        Style::Text,
+        Style::Script,
     );
-    let den = boxer::layout(&parse::to_ir("de", 16.0, Style::Text).unwrap(), Style::Text);
-    assert!(f.width >= num.width.max(den.width));
+    let den = boxer::layout(
+        &parse::to_ir("de", 16.0, Style::Text).unwrap(),
+        Style::Script,
+    );
+    assert!(
+        f.width >= num.width.max(den.width),
+        "frac width {} should be >= max(num_script {}, den_script {})",
+        f.width,
+        num.width,
+        den.width,
+    );
 }
 
 #[test]
