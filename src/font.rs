@@ -155,6 +155,28 @@ pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
     value as f32 * scale
 }
 
+/// Find the smallest vertical glyph variant whose advance measurement is
+/// `>= target_design_units`. Returns `(variant_glyph_id, advance_in_design_units)`
+/// or `None` if the glyph has no `MathVariants` entry, or none of its variants
+/// reach the target size.
+///
+/// v0.1 ignores `GlyphAssembly` (extensible glyphs built from parts) — that is
+/// deferred to v0.2.
+pub fn math_variant_vertical(
+    base: GlyphId,
+    target_design_units: f32,
+) -> Option<(GlyphId, f32)> {
+    let math = face().tables().math?;
+    let variants = math.variants?;
+    let construction = variants.vertical_constructions.get(base)?;
+    for v in construction.variants {
+        if v.advance_measurement as f32 >= target_design_units {
+            return Some((v.variant_glyph, v.advance_measurement as f32));
+        }
+    }
+    None
+}
+
 /// Emit the glyph's outline as an SVG path data string in font design units (y-up).
 /// Caller MUST apply `matrix(s 0 0 -s ox oy)` transform where `s = font_size / units_per_em`
 /// to convert to SVG (y-down) pixel space.
