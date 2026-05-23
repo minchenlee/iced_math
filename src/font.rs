@@ -1,5 +1,6 @@
 //! Bundled math font parsing.
 
+use std::fmt::Write;
 use std::sync::OnceLock;
 use ttf_parser::Face;
 pub use ttf_parser::GlyphId;
@@ -48,4 +49,34 @@ pub fn glyph_metrics(id: GlyphId, font_size: f32) -> GlyphMetrics {
         None => (0.0, 0.0),
     };
     GlyphMetrics { advance, height, depth }
+}
+
+struct PathBuilder(String);
+
+impl ttf_parser::OutlineBuilder for PathBuilder {
+    fn move_to(&mut self, x: f32, y: f32) {
+        let _ = write!(self.0, "M{} {} ", x, y);
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        let _ = write!(self.0, "L{} {} ", x, y);
+    }
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        let _ = write!(self.0, "Q{} {} {} {} ", x1, y1, x, y);
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        let _ = write!(self.0, "C{} {} {} {} {} {} ", x1, y1, x2, y2, x, y);
+    }
+    fn close(&mut self) {
+        self.0.push_str("Z ");
+    }
+}
+
+/// Emit the glyph's outline as an SVG path data string in font design units (y-up).
+/// Caller MUST apply `matrix(s 0 0 -s ox oy)` transform where `s = font_size / units_per_em`
+/// to convert to SVG (y-down) pixel space.
+/// Returns empty string for blank glyphs.
+pub fn outline_path(id: GlyphId) -> String {
+    let mut b = PathBuilder(String::new());
+    let _ = face().outline_glyph(id, &mut b);
+    b.0
 }
