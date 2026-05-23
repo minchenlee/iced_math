@@ -10,7 +10,7 @@ keywords = ["iced", "math", "latex", "katex", "tex"]
 categories = ["gui", "rendering"]
 
 [dependencies]
-iced = { version = "0.14", default-features = false, features = ["svg", "advanced", "thread-pool"] }
+iced = { version = "0.14", default-features = false, features = ["svg", "advanced", "thread-pool", "x11"] }
 pulldown-latex = "0.7"
 ttf-parser = "0.25"
 
