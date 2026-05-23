@@ -78,9 +78,86 @@ pub fn layout(node: &Node, style: Style) -> Box {
         }
         Node::Row(items) => layout_row(items, style),
         Node::Frac { num, den } => layout_frac(num, den, style),
+        Node::Subsup { base, sub, sup } => layout_subsup(
+            base,
+            sub.as_deref(),
+            sup.as_deref(),
+            style,
+        ),
         Node::Error(_) => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
         _ => Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty },
     }
+}
+
+/// Layout `base` with optional sub/superscripts. If `base` is a big operator
+/// flagged with `limits: true`, stack scripts vertically (see [`layout_with_limits`]);
+/// otherwise place scripts to the right of `base`, sized down by [`Style::sub`].
+fn layout_subsup(
+    base: &Node,
+    sub: Option<&Node>,
+    sup: Option<&Node>,
+    style: Style,
+) -> Box {
+    use crate::font::{math_constant, MathConstant};
+
+    // Limits branch: stack scripts above/below big-op base.
+    if let Node::Op { limits: true, .. } = base {
+        return layout_with_limits(base, sub, sup, style);
+    }
+
+    let b = layout(base, style);
+    let script_style = style.sub();
+    let s_sup = sup.map(|n| layout(n, script_style));
+    let s_sub = sub.map(|n| layout(n, script_style));
+    let base_size = approx_font_size_from_box(&b);
+
+    let sup_shift = math_constant(MathConstant::SuperscriptShiftUp, base_size);
+    let sub_shift = math_constant(MathConstant::SubscriptShiftDown, base_size);
+
+    // sup baseline sits at (base baseline - sup_shift); sub baseline at (base baseline + sub_shift).
+    let sup_ascent = s_sup.as_ref().map(|s| sup_shift + s.height).unwrap_or(0.0);
+    let sub_descent = s_sub.as_ref().map(|s| sub_shift + s.depth).unwrap_or(0.0);
+
+    let parent_height = b.height.max(sup_ascent);
+    let parent_depth = b.depth.max(sub_descent);
+
+    let scripts_x = b.width;
+    let mut max_w = b.width;
+
+    let b_width = b.width;
+    let b_height = b.height;
+    let mut children = Vec::new();
+    // Base: baseline aligns with parent baseline.
+    children.push(Child {
+        offset: Point { x: 0.0, y: parent_height - b_height },
+        child: b,
+    });
+
+    if let Some(sup_box) = s_sup {
+        let sup_baseline_y = parent_height - sup_shift;
+        let sup_top = sup_baseline_y - sup_box.height;
+        max_w = max_w.max(scripts_x + sup_box.width);
+        children.push(Child { offset: Point { x: scripts_x, y: sup_top }, child: sup_box });
+    }
+    if let Some(sub_box) = s_sub {
+        let sub_baseline_y = parent_height + sub_shift;
+        let sub_top = sub_baseline_y - sub_box.height;
+        max_w = max_w.max(scripts_x + sub_box.width);
+        children.push(Child { offset: Point { x: scripts_x, y: sub_top }, child: sub_box });
+    }
+
+    let _ = b_width; // base width is captured in scripts_x already
+    Box { width: max_w, height: parent_height, depth: parent_depth, kind: BoxKind::HBox(children) }
+}
+
+fn layout_with_limits(
+    _base: &Node,
+    _sub: Option<&Node>,
+    _sup: Option<&Node>,
+    _style: Style,
+) -> Box {
+    // Wired in subtask 18d.
+    Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty }
 }
 
 fn layout_row(items: &[Node], style: Style) -> Box {
