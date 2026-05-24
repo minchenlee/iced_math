@@ -1,6 +1,6 @@
 [package]
 name = "iced_math"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.88"
 description = "Native LaTeX math widget for Iced 0.14 — pure Rust, zero JS"

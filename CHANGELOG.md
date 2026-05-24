@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-05-24
+### Added
+- **Math alphabets:** `\mathbb`, `\mathcal`, `\mathfrak`, `\mathbf`, `\mathsf`, `\mathtt`, `\mathit` (and the bold/sans/italic combinations pulldown-latex distinguishes). Letters and digits remap to their Unicode math-alphanumeric codepoints (e.g. `\mathbb{R}` → ℝ, `\mathcal{L}` → ℒ). The font state applies across a braced group and is correctly scoped — it does not leak past the group and resets across matrix cell/row boundaries. A character with no styled glyph in the bundled font falls back to its plain form.
+- **Binomials:** `\binom{n}{k}` (and `\dbinom`, `\tbinom`) render as a ruleless stack inside auto-sized parentheses, reusing the fraction layout's axis spacing minus the rule.
+
+### Changed
+- README "supported LaTeX" list updated; version labels bumped to v0.4.
+
 ## [0.3.0] - 2026-05-24
 ### Added
 - **Matrices and tabular environments:** `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `Bmatrix`, `Vmatrix`, plus `cases`, `aligned`, and `array`. Per-column alignment, per-row ascent/descent, and the whole grid centered on the math axis so it lines up with surrounding relations. Enclosing delimiters (e.g. `pmatrix`'s parens) auto-size to the grid.

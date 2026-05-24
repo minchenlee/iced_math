@@ -53,6 +53,10 @@ impl App {
             (r"\hat{p}\,\psi = -i\hbar\,\nabla\psi", false),
             (r"A = \begin{pmatrix} a & b \\ c & d \end{pmatrix}", true),
             (r"|x| = \begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}", true),
+            // v0.4: math alphabets + binomials.
+            (r"\mathbb{E}[X] \in \mathbb{R}^n, \quad \mathbb{N} \subset \mathbb{Z}", true),
+            (r"\mathcal{L}(\theta) = \mathbb{E}_{x \sim \mathcal{D}}[\ell(x)]", true),
+            (r"\binom{n}{k} = \frac{n!}{k!(n-k)!}", true),
         ];
         let items: Vec<Element<'_, Message>> = entries
             .iter()

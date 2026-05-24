@@ -4,13 +4,13 @@ Native LaTeX math widget for [Iced](https://iced.rs) 0.14. Pure Rust, **zero Jav
 
 ## Status
 
-Pre-1.0 — API may change. v0.2 supports a Tier 1 LaTeX subset (~50 commands).
+Pre-1.0 — API may change. v0.3 supports a Tier 1 LaTeX subset (~60 commands), including matrices, named operators, and accents.
 
 ## Installation
 
 ```toml
 [dependencies]
-iced_math = "0.2"
+iced_math = "0.3"
 # iced_math renders through iced's `svg` widget, so your iced dependency must
 # enable a renderer (`wgpu` and/or `tiny-skia`) plus the `svg` feature.
 iced = { version = "0.14", features = ["wgpu", "tiny-skia", "svg"] }
@@ -74,7 +74,7 @@ For the `0.x` series the supported public API is: `inline`, `block`,
 `MathRenderer`, `Color`, and `Error`. Everything else is internal and may change
 between minor versions.
 
-## Supported LaTeX (v0.2)
+## Supported LaTeX (v0.3)
 
 - Atoms: letters, digits, basic operators (`+`, `−`, `×`, `÷`, `=`, `<`, `>`, `≤`, `≥`)
 - Greek: `\alpha` … `\omega`, `\Gamma` … `\Omega`
@@ -85,6 +85,8 @@ between minor versions.
 - Named operators: `\sin`, `\cos`, `\log`, … (upright, tight-set) and limit operators `\lim`, `\max`, `\min`, `\sup`, `\inf`, … (subscript stacks underneath in display style)
 - Accents: `\hat`, `\bar`, `\vec`, `\tilde`, `\dot`, `\ddot`, `\check`, `\breve`, `\acute`, `\grave` (centered over the body)
 - Matrices: `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `Bmatrix`, `Vmatrix`, plus `cases`, `aligned`, and `array` (per-column alignment, axis-centered)
+- Binomials: `\binom{n}{k}` (ruleless stack in parentheses; also `\dbinom`, `\tbinom`)
+- Math alphabets: `\mathbb`, `\mathcal`, `\mathfrak`, `\mathbf`, `\mathsf`, `\mathtt`, `\mathit` (Unicode math-alphanumeric remapping; characters without a styled glyph fall back to the plain form)
 - Delimiters: `\left( … \right)`, `\left[ … \right]` with auto-sizing variants
 
 ## Not yet supported (deferred to later releases)
@@ -93,9 +95,7 @@ Roughly ordered by planned priority:
 
 - Multi-line display environments (`align`, `gather`, `multline`) and `\hline`/column separators in `array`
 - `GlyphAssembly` for extra-tall delimiters — `\left( … \right)` won't grow past the largest single glyph
-- Binomials (`\binom{n}{k}`) — currently drawn with a fraction rule; should be ruleless
 - Unary vs. binary `-`/`+` disambiguation — a leading unary minus gets binary spacing
-- AMS alphabets (`\mathbb`, `\mathfrak`, `\mathcal`) — fall back to the regular glyph
 - Sizing modes (`\scriptstyle`, `\displaystyle` overrides)
 
 ## How it works
