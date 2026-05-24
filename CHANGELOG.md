@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.1] - 2026-05-24
+### Fixed
+- Fraction rule now stays visible on narrow content (e.g. `\frac{1}{2}`) via a small horizontal overhang.
+- Fraction rule is vertically centred between the numerator's and denominator's ink, instead of floating a bare-digit numerator high above a denominator pinned close to the bar.
+- Tall fraction content (`\frac{\sqrt{\pi}}{2}`) no longer crosses the rule — numerator depth / denominator height now enforce the OpenType MATH `Fraction*GapMin` clearance.
+- Radical: the surd glyph's top is aligned to the vinculum so the hook, stem, and overline form one continuous stroke (previously a detached/misaligned connector).
+- SVG viewport is padded by 1px so edge glyphs (e.g. fraction denominators with near-zero depth) no longer lose their bottom row to rasterizer antialiasing.
+
+### Changed
+- `viewer` example now activates `iced`'s `wgpu` + `tiny-skia` renderer features (dev-dependency only); the library itself remains renderer-agnostic.
+
 ## [0.1.0] - 2026-05-23
 ### Added
 - Initial release.

@@ -48,9 +48,13 @@ cargo run --example viewer
 ## Not yet supported (deferred to later releases)
 
 - Matrices, `aligned`, `cases`, multiline environments — v0.2
-- Accents (`\hat`, `\bar`, `\tilde`) — v0.2
+- Accents (`\hat`, `\bar`, `\vec`, `\tilde`) — currently render misplaced (e.g. `\vec{B}` shows the arrow as a superscript); proper over-accent stacking is v0.2
+- Binomials (`\binom{n}{k}`) — currently drawn with a fraction rule; the zero-thickness (open) binomial bar is v0.2
+- Named limit-operators (`\lim`, `\max`, `\min`, `\sup`, `\inf`) — subscript renders to the right instead of stacked underneath; v0.2
+- Multi-letter function names (`\sin`, `\cos`, `\log`, …) — currently typeset as spaced italic ordinaries instead of an upright, tightly-set operator; v0.2
+- Unary vs. binary `-`/`+` disambiguation — a leading unary minus gets binary spacing; v0.2
 - `GlyphAssembly` for extra-tall delimiters — v0.2
-- AMS symbols (`\mathbb`, `\mathfrak`, `\mathcal`) — v0.3
+- AMS alphabets (`\mathbb`, `\mathfrak`, `\mathcal`) — fall back to the regular glyph; v0.3
 - Color, sizing modes — v0.3
 
 ## How it works
