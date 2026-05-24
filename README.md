@@ -84,13 +84,14 @@ between minor versions.
 - Large operators with limits: `\sum`, `\int`, `\prod` (display style places limits above/below)
 - Named operators: `\sin`, `\cos`, `\log`, … (upright, tight-set) and limit operators `\lim`, `\max`, `\min`, `\sup`, `\inf`, … (subscript stacks underneath in display style)
 - Accents: `\hat`, `\bar`, `\vec`, `\tilde`, `\dot`, `\ddot`, `\check`, `\breve`, `\acute`, `\grave` (centered over the body)
+- Matrices: `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `Bmatrix`, `Vmatrix`, plus `cases`, `aligned`, and `array` (per-column alignment, axis-centered)
 - Delimiters: `\left( … \right)`, `\left[ … \right]` with auto-sizing variants
 
 ## Not yet supported (deferred to later releases)
 
 Roughly ordered by planned priority:
 
-- Matrices, `aligned`, `cases`, multiline environments — currently parsed then dropped (render as nothing)
+- Multi-line display environments (`align`, `gather`, `multline`) and `\hline`/column separators in `array`
 - `GlyphAssembly` for extra-tall delimiters — `\left( … \right)` won't grow past the largest single glyph
 - Binomials (`\binom{n}{k}`) — currently drawn with a fraction rule; should be ruleless
 - Unary vs. binary `-`/`+` disambiguation — a leading unary minus gets binary spacing

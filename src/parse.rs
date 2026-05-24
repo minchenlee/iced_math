@@ -3,12 +3,15 @@
 //! v0.1 Task 10: atoms.
 //! v0.1 Task 11: sub/superscripts with group-aware element reading.
 
-use pulldown_latex::event::{Content, DelimiterType, Event, Grouping, ScriptType, Visual};
+use pulldown_latex::event::{
+    ArrayColumn, ColumnAlignment, Content, DelimiterType, EnvironmentFlow, Event, Grouping,
+    ScriptType, Visual,
+};
 use pulldown_latex::{Parser, Storage};
 use ttf_parser::GlyphId;
 
 use crate::font;
-use crate::ir::{AtomClass, Node, Style};
+use crate::ir::{AtomClass, ColAlign, Node, Style};
 
 #[derive(Debug)]
 pub struct ParseError(pub String);
@@ -98,9 +101,23 @@ fn parse_element(
                 body: Box::new(Node::Row(inner)),
             }))
         }
-        Event::Begin(_) => {
-            // Other groupings (environments) — handled in later tasks.
-            // For now, consume to matching End to keep stream balanced.
+        Event::Begin(g) => {
+            // Tabular math environments (matrix, cases, aligned, array, …).
+            if let Some(col_aligns) = matrix_col_aligns(&g) {
+                let m = parse_matrix_env(events, cursor, font_size, style, col_aligns)?;
+                // `cases` carries an implicit left brace; wrap it in a Fenced with
+                // a null right delimiter so the boxer stretches a `{` to fit.
+                if let Grouping::Cases { left: true } = g {
+                    let open = font::glyph_id('{').unwrap_or(GlyphId(0));
+                    return Ok(Some(Node::Fenced {
+                        open,
+                        close: GlyphId(0),
+                        body: Box::new(m),
+                    }));
+                }
+                return Ok(Some(m));
+            }
+            // Unknown grouping: consume to matching End to stay balanced.
             let inner =
                 parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
@@ -189,7 +206,9 @@ fn parse_element(
             }
             Visual::Negation => Ok(None),
         },
-        // v0.1 future tasks: Space, StateChange, EnvironmentFlow. Consume but produce nothing.
+        // Space/StateChange: not yet modeled. Stray EnvironmentFlow outside a
+        // matrix environment (parse_matrix_env consumes them in context) is
+        // ignored to keep the stream balanced.
         Event::Space { .. } | Event::StateChange(_) | Event::EnvironmentFlow(_) => Ok(None),
     }
 }
@@ -259,6 +278,105 @@ fn large_op_node(ch: char, small: bool, font_size: f32, style: Style) -> Result<
 /// `GlyphId(0)`, the sentinel the boxer treats as an invisible delimiter.
 fn delim_glyph(ch: Option<char>) -> GlyphId {
     ch.and_then(font::glyph_id).unwrap_or(GlyphId(0))
+}
+
+fn col_align(a: ColumnAlignment) -> ColAlign {
+    match a {
+        ColumnAlignment::Left => ColAlign::Left,
+        ColumnAlignment::Center => ColAlign::Center,
+        ColumnAlignment::Right => ColAlign::Right,
+    }
+}
+
+/// Column alignment template for a tabular math grouping, or `None` if this
+/// grouping isn't a grid we lay out as a matrix. The returned vec gives explicit
+/// alignments for known columns; columns past its length default to Center.
+fn matrix_col_aligns(g: &Grouping) -> Option<Vec<ColAlign>> {
+    match g {
+        Grouping::Matrix { alignment } => Some(vec![col_align(*alignment)]),
+        Grouping::SubArray { alignment } => Some(vec![col_align(*alignment)]),
+        // cases / rcases: two left-aligned columns (value, condition).
+        Grouping::Cases { .. } => Some(vec![ColAlign::Left, ColAlign::Left]),
+        // aligned / split: right, left, right, left … pairs.
+        Grouping::Aligned | Grouping::Split => {
+            Some(vec![ColAlign::Right, ColAlign::Left])
+        }
+        Grouping::Array(cols) => {
+            let aligns: Vec<ColAlign> = cols
+                .iter()
+                .filter_map(|c| match c {
+                    ArrayColumn::Column(a) => Some(col_align(*a)),
+                    _ => None,
+                })
+                .collect();
+            Some(if aligns.is_empty() {
+                vec![ColAlign::Center]
+            } else {
+                aligns
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Collect a tabular environment's cells into a [`Node::Matrix`]. Cells are
+/// separated by `EnvironmentFlow::Alignment`, rows by `EnvironmentFlow::NewLine`;
+/// consumes the matching `Event::End`.
+fn parse_matrix_env(
+    events: &[Event],
+    cursor: &mut usize,
+    font_size: f32,
+    style: Style,
+    col_aligns: Vec<ColAlign>,
+) -> Result<Node, ParseError> {
+    let mut rows: Vec<Vec<Node>> = Vec::new();
+    let mut row: Vec<Node> = Vec::new();
+    let mut cell: Vec<Node> = Vec::new();
+
+    let finish_cell = |cell: &mut Vec<Node>, row: &mut Vec<Node>| {
+        let n = match cell.len() {
+            0 => Node::Row(Vec::new()),
+            1 => cell.drain(..).next().unwrap(),
+            _ => Node::Row(std::mem::take(cell)),
+        };
+        cell.clear();
+        row.push(n);
+    };
+
+    while *cursor < events.len() {
+        match &events[*cursor] {
+            Event::End => {
+                *cursor += 1;
+                finish_cell(&mut cell, &mut row);
+                // Drop a wholly-empty trailing row (e.g. from a final `\\`).
+                if !(row.len() == 1 && matches!(row[0], Node::Row(ref r) if r.is_empty())) {
+                    rows.push(std::mem::take(&mut row));
+                } else {
+                    row.clear();
+                }
+                return Ok(Node::Matrix { rows, col_aligns });
+            }
+            Event::EnvironmentFlow(EnvironmentFlow::Alignment) => {
+                *cursor += 1;
+                finish_cell(&mut cell, &mut row);
+            }
+            Event::EnvironmentFlow(EnvironmentFlow::NewLine { .. }) => {
+                *cursor += 1;
+                finish_cell(&mut cell, &mut row);
+                rows.push(std::mem::take(&mut row));
+            }
+            // StartLines and other flow markers: ignore (no hline rendering yet).
+            Event::EnvironmentFlow(_) => {
+                *cursor += 1;
+            }
+            _ => {
+                if let Some(n) = parse_element(events, cursor, font_size, style)? {
+                    cell.push(n);
+                }
+            }
+        }
+    }
+    Err(ParseError("unterminated matrix environment".into()))
 }
 
 /// Peek the character of the accent element at `idx` (the element following an
@@ -569,6 +687,54 @@ mod tests {
             panic!("expected OpName, got {:?}", items[0])
         };
         assert!(*limits, "\\lim must be a limit operator");
+    }
+
+    // --- parse_matrix.rs ---
+    #[test]
+    fn parses_2x2_matrix() {
+        let ir = to_ir(r"\begin{matrix} a & b \\ c & d \end{matrix}", 16.0, Style::Text)
+            .unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Matrix { rows, .. } = &items[0] else {
+            panic!("expected Matrix, got {:?}", items[0])
+        };
+        assert_eq!(rows.len(), 2, "two rows");
+        assert_eq!(rows[0].len(), 2, "two cols in row 0");
+        assert_eq!(rows[1].len(), 2, "two cols in row 1");
+    }
+
+    #[test]
+    fn pmatrix_wraps_matrix_in_fenced_parens() {
+        let ir = to_ir(r"\begin{pmatrix} a \\ b \end{pmatrix}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Fenced { body, .. } = &items[0] else {
+            panic!("expected Fenced wrapping the matrix, got {:?}", items[0])
+        };
+        // LeftRight wraps its contents in a Row; the matrix is inside.
+        assert!(contains_matrix(body), "Fenced body must contain a Matrix: {body:?}");
+    }
+
+    fn contains_matrix(n: &Node) -> bool {
+        match n {
+            Node::Matrix { .. } => true,
+            Node::Row(items) => items.iter().any(contains_matrix),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn cases_is_left_braced_matrix() {
+        let ir = to_ir(r"\begin{cases} x & a \\ y & b \end{cases}", 16.0, Style::Text)
+            .unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Fenced { body, .. } = &items[0] else {
+            panic!("expected Fenced (left brace) wrapping matrix, got {:?}", items[0])
+        };
+        let Node::Matrix { rows, col_aligns } = body.as_ref() else {
+            panic!("expected Matrix inside cases")
+        };
+        assert_eq!(rows.len(), 2);
+        assert_eq!(col_aligns[0], ColAlign::Left);
     }
 
     // --- parse_accents.rs ---

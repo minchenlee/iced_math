@@ -99,6 +99,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
         Node::Op { .. } => layout_op(node, style),
         Node::OpName { body, .. } => layout(body, style),
         Node::Accent { accent, body } => layout_accent(*accent, body, style),
+        Node::Matrix { rows, col_aligns } => layout_matrix(rows, col_aligns, style),
         Node::Error(_) => Box {
             width: 0.0,
             height: 0.0,
@@ -495,6 +496,127 @@ fn layout_accent(accent: crate::font::GlyphId, body: &Node, style: Style) -> Box
     }
 }
 
+/// Layout a matrix / aligned / cases grid. Computes per-column widths and
+/// per-row asc/descent, places each cell with its column alignment, and centers
+/// the whole grid vertically on the math axis so it lines up with neighbours.
+fn layout_matrix(rows: &[Vec<Node>], col_aligns: &[crate::ir::ColAlign], style: Style) -> Box {
+    use crate::font::{math_constant, MathConstant};
+    use crate::ir::ColAlign;
+
+    if rows.is_empty() {
+        return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+    }
+
+    // Lay out every cell; track grid dimensions.
+    let ncols = rows.iter().map(|r| r.len()).max().unwrap_or(0);
+    let nrows = rows.len();
+    if ncols == 0 {
+        return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+    }
+
+    let mut cells: Vec<Vec<Option<Box>>> = Vec::with_capacity(nrows);
+    let mut col_w = vec![0.0f32; ncols];
+    let mut row_h = vec![0.0f32; nrows];
+    let mut row_d = vec![0.0f32; nrows];
+
+    let base_size = style.font_size(approx_base_font_size_from_node_matrix(rows));
+    // Matrix cells render in text style (not display) regardless of context.
+    let cell_style = match style {
+        Style::Display => Style::Text,
+        s => s,
+    };
+
+    for (r, row) in rows.iter().enumerate() {
+        let mut out_row: Vec<Option<Box>> = Vec::with_capacity(ncols);
+        for (c, col_w_c) in col_w.iter_mut().enumerate() {
+            if let Some(node) = row.get(c) {
+                let b = layout(node, cell_style);
+                *col_w_c = col_w_c.max(b.width);
+                row_h[r] = row_h[r].max(b.height);
+                row_d[r] = row_d[r].max(b.depth);
+                out_row.push(Some(b));
+            } else {
+                out_row.push(None);
+            }
+        }
+        cells.push(out_row);
+    }
+
+    // Spacing: a column gap (~em) and a row gap (~0.4em).
+    let col_gap = base_size * 0.8;
+    let row_gap = base_size * 0.4;
+
+    let total_w: f32 = col_w.iter().sum::<f32>() + col_gap * (ncols.saturating_sub(1)) as f32;
+
+    // Stack rows top→bottom; record each row's baseline y (from grid top).
+    let mut row_baseline = vec![0.0f32; nrows];
+    let mut y = 0.0f32;
+    for r in 0..nrows {
+        y += row_h[r];
+        row_baseline[r] = y;
+        y += row_d[r];
+        if r + 1 < nrows {
+            y += row_gap;
+        }
+    }
+    let total_h = y;
+
+    // Center the grid on the math axis: the grid's vertical midpoint should sit
+    // at the axis height above the parent baseline.
+    let axis = math_constant(MathConstant::AxisHeight, base_size);
+    let half = total_h / 2.0;
+    let height = half + axis;
+    let depth = half - axis;
+
+    // Column left edges.
+    let mut col_x = vec![0.0f32; ncols];
+    let mut x = 0.0;
+    for (slot, w) in col_x.iter_mut().zip(col_w.iter()) {
+        *slot = x;
+        x += w + col_gap;
+    }
+
+    let mut children = Vec::new();
+    for (r, out_row) in cells.into_iter().enumerate() {
+        for (c, maybe) in out_row.into_iter().enumerate() {
+            let Some(b) = maybe else { continue };
+            let align = col_aligns.get(c).copied().unwrap_or(ColAlign::Center);
+            let cell_x = match align {
+                ColAlign::Left => col_x[c],
+                ColAlign::Right => col_x[c] + (col_w[c] - b.width),
+                ColAlign::Center => col_x[c] + (col_w[c] - b.width) / 2.0,
+            };
+            // Cell baseline aligns with the row baseline; box top sits at
+            // (row_baseline - b.height) measured from grid top.
+            let cell_y = row_baseline[r] - b.height;
+            children.push(Child {
+                offset: Point { x: cell_x, y: cell_y },
+                child: b,
+            });
+        }
+    }
+
+    Box {
+        width: total_w,
+        height,
+        depth,
+        kind: BoxKind::HBox(children),
+    }
+}
+
+/// Best-effort base font size for a matrix: first non-empty cell.
+fn approx_base_font_size_from_node_matrix(rows: &[Vec<Node>]) -> f32 {
+    for row in rows {
+        for cell in row {
+            let s = approx_base_font_size_from_node(cell);
+            if s > 0.0 {
+                return s;
+            }
+        }
+    }
+    16.0
+}
+
 /// Layout a bare big-op (e.g. `\sum`, `\int`) as a single glyph box.
 fn layout_op(node: &Node, style: Style) -> Box {
     let Node::Op {
@@ -834,6 +956,7 @@ fn approx_base_font_size_from_node(n: &Node) -> f32 {
         Node::Fenced { body, .. } => approx_base_font_size_from_node(body),
         Node::OpName { body, .. } => approx_base_font_size_from_node(body),
         Node::Accent { body, .. } => approx_base_font_size_from_node(body),
+        Node::Matrix { rows, .. } => approx_base_font_size_from_node_matrix(rows),
         _ => 16.0,
     }
 }
@@ -847,7 +970,8 @@ fn atom_class(node: &Node) -> Option<crate::ir::AtomClass> {
         | Node::Radical { .. }
         | Node::Subsup { .. }
         | Node::Row(_)
-        | Node::Accent { .. } => Some(crate::ir::AtomClass::Ord),
+        | Node::Accent { .. }
+        | Node::Matrix { .. } => Some(crate::ir::AtomClass::Ord),
         _ => None,
     }
 }
@@ -1127,6 +1251,56 @@ mod tests {
         assert!(with_op.width > tight.width,
             "\\sin x ({}) should exceed tight 'sinx' ({}) by Op spacing",
             with_op.width, tight.width);
+    }
+
+    // --- boxer_matrix.rs ---
+    #[test]
+    fn matrix_grid_has_rows_and_cols() {
+        let b = layout(
+            &parse::to_ir(r"\begin{matrix} a & b \\ c & d \end{matrix}", 16.0, Style::Text)
+                .unwrap(),
+            Style::Text,
+        );
+        // Grid renders with positive extent and four glyph leaves (a,b,c,d).
+        assert!(b.width > 0.0 && b.height > 0.0 && b.depth > 0.0);
+        assert_eq!(count_glyphs(&b), 4, "2x2 matrix has 4 glyph cells");
+    }
+
+    fn count_glyphs(b: &Box) -> usize {
+        match &b.kind {
+            BoxKind::Glyph { .. } => 1,
+            BoxKind::HBox(c) | BoxKind::VBox(c) => {
+                c.iter().map(|ch| count_glyphs(&ch.child)).sum()
+            }
+            _ => 0,
+        }
+    }
+
+    #[test]
+    fn matrix_wider_with_more_columns() {
+        let two = layout(
+            &parse::to_ir(r"\begin{matrix} a & b \end{matrix}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let three = layout(
+            &parse::to_ir(r"\begin{matrix} a & b & c \end{matrix}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(three.width > two.width, "3 cols ({}) wider than 2 ({})", three.width, two.width);
+    }
+
+    #[test]
+    fn matrix_taller_with_more_rows() {
+        let one = layout(
+            &parse::to_ir(r"\begin{matrix} a \end{matrix}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let two = layout(
+            &parse::to_ir(r"\begin{matrix} a \\ b \end{matrix}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(two.height + two.depth > one.height + one.depth,
+            "2 rows ({}) taller than 1 ({})", two.height + two.depth, one.height + one.depth);
     }
 
     // --- boxer_accents.rs ---

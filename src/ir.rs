@@ -53,9 +53,25 @@ pub enum Node {
         accent: GlyphId,
         body: Box<Node>,
     },
+    /// A matrix / aligned / cases grid. `rows[r][c]` is the cell node at row `r`,
+    /// column `c` (ragged rows allowed — short rows are treated as empty on the
+    /// right). `col_aligns` gives each column's horizontal alignment; columns
+    /// beyond its length default to `ColAlign::Center`. Any enclosing delimiters
+    /// (e.g. `pmatrix`'s parens) are applied by a surrounding [`Node::Fenced`].
+    Matrix {
+        rows: Vec<Vec<Node>>,
+        col_aligns: Vec<ColAlign>,
+    },
     Space(SpaceKind),
     /// Sentinel for parse error — boxer emits red-monospace fallback.
     Error(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColAlign {
+    Left,
+    Center,
+    Right,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
