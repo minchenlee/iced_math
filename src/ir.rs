@@ -2,6 +2,9 @@
 
 use ttf_parser::GlyphId;
 
+// `Space` and `Error` variants are reserved for later tiers (explicit spacing
+// nodes, structured parse errors) and not constructed yet.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Atom {
@@ -51,6 +54,8 @@ pub enum AtomClass {
     Inner,
 }
 
+// Reserved for explicit-spacing support (`\,` `\;` `\quad` `\mkern`) in a later tier.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpaceKind {
     Thin,

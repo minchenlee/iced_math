@@ -16,6 +16,8 @@ pub fn units_per_em() -> f32 {
     face().units_per_em() as f32
 }
 
+// Used only by tests; kept as a small reusable font-capability probe.
+#[allow(dead_code)]
 pub fn has_math_table() -> bool {
     face().tables().math.is_some()
 }
@@ -78,6 +80,9 @@ impl ttf_parser::OutlineBuilder for PathBuilder {
 /// All variants resolve to font design units (via `MathValue.value: i16`) and are
 /// scaled to pixels by `math_constant()`, except `RadicalDegreeBottomRaisePercent`
 /// which is returned by ttf-parser as `i16` percent and converted to a 0..1 ratio.
+// Not all constants are consumed yet; the unused ones back LaTeX features
+// scheduled for later tiers (limits, stretch stacks). Kept for completeness.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum MathConstant {
     AxisHeight,
