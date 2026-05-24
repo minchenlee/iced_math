@@ -10,7 +10,12 @@ keywords = ["iced", "math", "latex", "katex", "tex"]
 categories = ["gui", "rendering"]
 
 [dependencies]
-iced = { version = "0.14", default-features = false, features = ["svg", "advanced", "thread-pool", "x11"] }
+# Library needs svg+advanced for rendering. iced 0.14 also hard-requires an
+# executor feature at compile time (`compile_error!` otherwise), so `thread-pool`
+# stays — it's the only executor that pulls no extra async runtime. `x11` is the
+# one purely-windowing feature we drop: it's Linux display only, viewer-specific,
+# and re-added as a dev-dep below so it never burdens downstream users.
+iced = { version = "0.14", default-features = false, features = ["svg", "advanced", "thread-pool"] }
 pulldown-latex = "0.7"
 ttf-parser = "0.25"
 
@@ -20,8 +25,9 @@ resvg = "0.46"
 tiny-skia = "0.11"
 criterion = "0.5"
 # Activates iced's renderer + windowing shell for the `viewer` example only.
-# The library itself stays renderer-agnostic (it merely emits SVG bytes).
-iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia"] }
+# thread-pool/x11 used to ride in via the library dep; now that the library no
+# longer forces them, the example must request them here (x11 matters on Linux).
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "thread-pool", "x11"] }
 
 [lib]
 name = "iced_math"
