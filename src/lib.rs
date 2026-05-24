@@ -19,6 +19,9 @@ mod widget;
 mod color;
 pub use color::Color;
 
+mod error;
+pub use error::Error;
+
 use iced::advanced::svg::Renderer as SvgRenderer;
 use iced::advanced::text::Renderer as TextRenderer;
 use iced::widget::{container, svg as svg_widget, text};
