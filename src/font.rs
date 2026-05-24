@@ -28,6 +28,92 @@ pub fn glyph_id(ch: char) -> Option<GlyphId> {
     face().glyph_index(ch)
 }
 
+/// Map an ASCII/Greek letter (or digit) to its Unicode math-alphanumeric
+/// codepoint for the given LaTeX font face (`\mathbb`, `\mathcal`, `\mathfrak`,
+/// `\mathbf`, `\mathsf`, `\mathtt`, …). Ported from pulldown-latex's
+/// `Font::map_char` so our SVG path matches its MathML path. Characters with no
+/// styled form (and the `UpRight`/`None` default) map to themselves; the caller
+/// must still check the resulting codepoint has a glyph and fall back if not.
+pub fn map_variant(font: pulldown_latex::event::Font, c: char) -> char {
+    use pulldown_latex::event::Font;
+    char::from_u32(match (font, c) {
+        // Bold Script
+        (Font::BoldScript, 'A'..='Z') => c as u32 + 0x1D48F,
+        (Font::BoldScript, 'a'..='z') => c as u32 + 0x1D489,
+        // Bold Italic
+        (Font::BoldItalic, 'A'..='Z') => c as u32 + 0x1D427,
+        (Font::BoldItalic, 'a'..='z') => c as u32 + 0x1D421,
+        (Font::BoldItalic, '\u{0391}'..='\u{03A1}' | '\u{03A3}'..='\u{03A9}') => c as u32 + 0x1D38B,
+        (Font::BoldItalic, '\u{03B1}'..='\u{03C9}') => c as u32 + 0x1D385,
+        // Bold
+        (Font::Bold, 'A'..='Z') => c as u32 + 0x1D3BF,
+        (Font::Bold, 'a'..='z') => c as u32 + 0x1D3B9,
+        (Font::Bold, '\u{0391}'..='\u{03A1}' | '\u{03A3}'..='\u{03A9}') => c as u32 + 0x1D317,
+        (Font::Bold, '\u{03B1}'..='\u{03C9}') => c as u32 + 0x1D311,
+        (Font::Bold, '0'..='9') => c as u32 + 0x1D79E,
+        // Fraktur
+        (Font::Fraktur, 'A' | 'B' | 'D'..='G' | 'J'..='Q' | 'S'..='Y') => c as u32 + 0x1D4C3,
+        (Font::Fraktur, 'C') => c as u32 + 0x20EA,
+        (Font::Fraktur, 'H' | 'I') => c as u32 + 0x20C4,
+        (Font::Fraktur, 'R') => c as u32 + 0x20CA,
+        (Font::Fraktur, 'Z') => c as u32 + 0x20CE,
+        (Font::Fraktur, 'a'..='z') => c as u32 + 0x1D4BD,
+        // Script (calligraphic) — \mathcal
+        (Font::Script, 'A' | 'C' | 'D' | 'G' | 'J' | 'K' | 'N'..='Q' | 'S'..='Z') => c as u32 + 0x1D45B,
+        (Font::Script, 'B') => c as u32 + 0x20EA,
+        (Font::Script, 'E' | 'F') => c as u32 + 0x20EB,
+        (Font::Script, 'H') => c as u32 + 0x20C3,
+        (Font::Script, 'I') => c as u32 + 0x20C7,
+        (Font::Script, 'L') => c as u32 + 0x20C6,
+        (Font::Script, 'M') => c as u32 + 0x20E6,
+        (Font::Script, 'R') => c as u32 + 0x20C9,
+        (Font::Script, 'a'..='d' | 'f' | 'h'..='n' | 'p'..='z') => c as u32 + 0x1D455,
+        (Font::Script, 'e') => c as u32 + 0x20CA,
+        (Font::Script, 'g') => c as u32 + 0x20A3,
+        (Font::Script, 'o') => c as u32 + 0x20C5,
+        // Monospace
+        (Font::Monospace, 'A'..='Z') => c as u32 + 0x1D62F,
+        (Font::Monospace, 'a'..='z') => c as u32 + 0x1D629,
+        (Font::Monospace, '0'..='9') => c as u32 + 0x1D7C6,
+        // Sans Serif
+        (Font::SansSerif, 'A'..='Z') => c as u32 + 0x1D55F,
+        (Font::SansSerif, 'a'..='z') => c as u32 + 0x1D559,
+        (Font::SansSerif, '0'..='9') => c as u32 + 0x1D7B2,
+        // Double Struck — \mathbb
+        (Font::DoubleStruck, 'A' | 'B' | 'D'..='G' | 'I'..='M' | 'O' | 'S'..='Y') => c as u32 + 0x1D4F7,
+        (Font::DoubleStruck, 'C') => c as u32 + 0x20BF,
+        (Font::DoubleStruck, 'H') => c as u32 + 0x20C5,
+        (Font::DoubleStruck, 'N') => c as u32 + 0x20C7,
+        (Font::DoubleStruck, 'P' | 'Q') => c as u32 + 0x20C9,
+        (Font::DoubleStruck, 'R') => c as u32 + 0x20CB,
+        (Font::DoubleStruck, 'Z') => c as u32 + 0x20CA,
+        (Font::DoubleStruck, 'a'..='z') => c as u32 + 0x1D4F1,
+        (Font::DoubleStruck, '0'..='9') => c as u32 + 0x1D7A8,
+        // Italic
+        (Font::Italic, 'A'..='Z') => c as u32 + 0x1D3F3,
+        (Font::Italic, 'a'..='g' | 'i'..='z') => c as u32 + 0x1D3ED,
+        (Font::Italic, 'h') => c as u32 + 0x20A6,
+        (Font::Italic, '\u{0391}'..='\u{03A1}' | '\u{03A3}'..='\u{03A9}') => c as u32 + 0x1D351,
+        (Font::Italic, '\u{03B1}'..='\u{03C9}') => c as u32 + 0x1D34B,
+        // Bold Fraktur
+        (Font::BoldFraktur, 'A'..='Z') => c as u32 + 0x1D52B,
+        (Font::BoldFraktur, 'a'..='z') => c as u32 + 0x1D525,
+        // Sans Serif Italic
+        (Font::SansSerifItalic, 'A'..='Z') => c as u32 + 0x1D5D7,
+        (Font::SansSerifItalic, 'a'..='z') => c as u32 + 0x1D5C1,
+        // Bold Sans Serif
+        (Font::BoldSansSerif, 'A'..='Z') => c as u32 + 0x1D593,
+        (Font::BoldSansSerif, 'a'..='z') => c as u32 + 0x1D58D,
+        (Font::BoldSansSerif, '0'..='9') => c as u32 + 0x1D7BC,
+        // Sans Serif Bold Italic
+        (Font::SansSerifBoldItalic, 'A'..='Z') => c as u32 + 0x1D5FB,
+        (Font::SansSerifBoldItalic, 'a'..='z') => c as u32 + 0x1D5F5,
+        // UpRight + anything unmapped → itself.
+        (_, _) => c as u32,
+    })
+    .unwrap_or(c)
+}
+
 /// Map the character pulldown-latex emits for an accent (`^`, `→`, `~`, `‾`/`¯`,
 /// …) to the font's **combining** accent glyph (U+03xx / U+20D7). The combining
 /// glyphs are the correctly-proportioned over-accent forms (zero advance,

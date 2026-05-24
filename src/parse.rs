@@ -4,8 +4,8 @@
 //! v0.1 Task 11: sub/superscripts with group-aware element reading.
 
 use pulldown_latex::event::{
-    ArrayColumn, ColumnAlignment, Content, DelimiterType, EnvironmentFlow, Event, Grouping,
-    ScriptType, Visual,
+    ArrayColumn, ColumnAlignment, Content, DelimiterType, EnvironmentFlow, Event, Font, Grouping,
+    ScriptType, StateChange, Visual,
 };
 use pulldown_latex::{Parser, Storage};
 use ttf_parser::GlyphId;
@@ -33,6 +33,7 @@ pub fn to_ir(src: &str, font_size: f32, style: Style) -> Result<Node, ParseError
         &mut cursor,
         font_size,
         style,
+        /* font */ None,
         /* in_group */ false,
     )?;
     Ok(Node::Row(row))
@@ -46,8 +47,13 @@ fn parse_until_end(
     cursor: &mut usize,
     font_size: f32,
     style: Style,
+    font: Option<Font>,
     in_group: bool,
 ) -> Result<Vec<Node>, ParseError> {
+    // A `\mathbb`/`\mathcal`/… font state-change applies to all following
+    // siblings in this group (and any deeper Normal/LeftRight groups), so we
+    // track it mutably here rather than passing it once.
+    let mut font = font;
     let mut row = Vec::new();
     while *cursor < events.len() {
         if in_group {
@@ -56,7 +62,14 @@ fn parse_until_end(
                 return Ok(row);
             }
         }
-        let node = parse_element(events, cursor, font_size, style)?;
+        // Font state-changes set the variant for subsequent siblings; consume
+        // them here so parse_element only sees renderable elements.
+        if let Event::StateChange(StateChange::Font(f)) = events[*cursor] {
+            *cursor += 1;
+            font = f;
+            continue;
+        }
+        let node = parse_element(events, cursor, font_size, style, font)?;
         if let Some(n) = node {
             row.push(n);
         }
@@ -74,6 +87,7 @@ fn parse_element(
     cursor: &mut usize,
     font_size: f32,
     style: Style,
+    font: Option<Font>,
 ) -> Result<Option<Node>, ParseError> {
     if *cursor >= events.len() {
         return Err(ParseError("expected element, got end of stream".into()));
@@ -81,15 +95,15 @@ fn parse_element(
     let ev = events[*cursor].clone();
     *cursor += 1;
     match ev {
-        Event::Content(c) => Ok(Some(content_to_node(c, font_size, style)?)),
+        Event::Content(c) => Ok(Some(content_to_node(c, font_size, style, font)?)),
         Event::Begin(Grouping::Normal) => {
             let inner =
-                parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+                parse_until_end(events, cursor, font_size, style, font, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
         }
         Event::Begin(Grouping::LeftRight(open_opt, close_opt)) => {
             let inner =
-                parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+                parse_until_end(events, cursor, font_size, style, font, /* in_group */ true)?;
             // v0.1: base glyph IDs only — boxer will swap to vertical variants
             // sized to body height. `\left.`/`\right.` (None) → GlyphId(0) sentinel,
             // which the boxer treats as no-op (invisible delimiter).
@@ -104,7 +118,7 @@ fn parse_element(
         Event::Begin(g) => {
             // Tabular math environments (matrix, cases, aligned, array, …).
             if let Some(col_aligns) = matrix_col_aligns(&g) {
-                let m = parse_matrix_env(events, cursor, font_size, style, col_aligns)?;
+                let m = parse_matrix_env(events, cursor, font_size, style, font, col_aligns)?;
                 // `cases` carries an implicit left brace; wrap it in a Fenced with
                 // a null right delimiter so the boxer stretches a `{` to fit.
                 if let Grouping::Cases { left: true } = g {
@@ -119,12 +133,12 @@ fn parse_element(
             }
             // Unknown grouping: consume to matching End to stay balanced.
             let inner =
-                parse_until_end(events, cursor, font_size, style, /* in_group */ true)?;
+                parse_until_end(events, cursor, font_size, style, font, /* in_group */ true)?;
             Ok(Some(Node::Row(inner)))
         }
         Event::End => Err(ParseError("unexpected End outside group".into())),
         Event::Script { ty, position } => {
-            let base = parse_element(events, cursor, font_size, style)?
+            let base = parse_element(events, cursor, font_size, style, font)?
                 .ok_or_else(|| ParseError("script base produced no node".into()))?;
 
             // Accents arrive as `Script{Superscript, AboveBelow}` where the
@@ -151,19 +165,19 @@ fn parse_element(
 
             let (sub, sup) = match ty {
                 ScriptType::Subscript => {
-                    let s = parse_element(events, cursor, font_size, style)?
+                    let s = parse_element(events, cursor, font_size, style, font)?
                         .ok_or_else(|| ParseError("subscript produced no node".into()))?;
                     (Some(Box::new(s)), None)
                 }
                 ScriptType::Superscript => {
-                    let s = parse_element(events, cursor, font_size, style)?
+                    let s = parse_element(events, cursor, font_size, style, font)?
                         .ok_or_else(|| ParseError("superscript produced no node".into()))?;
                     (None, Some(Box::new(s)))
                 }
                 ScriptType::SubSuperscript => {
-                    let sb = parse_element(events, cursor, font_size, style)?
+                    let sb = parse_element(events, cursor, font_size, style, font)?
                         .ok_or_else(|| ParseError("subscript produced no node".into()))?;
-                    let sp = parse_element(events, cursor, font_size, style)?
+                    let sp = parse_element(events, cursor, font_size, style, font)?
                         .ok_or_else(|| ParseError("superscript produced no node".into()))?;
                     (Some(Box::new(sb)), Some(Box::new(sp)))
                 }
@@ -175,18 +189,22 @@ fn parse_element(
             }))
         }
         Event::Visual(v) => match v {
-            Visual::Fraction(_) => {
-                let num = parse_element(events, cursor, font_size, style)?
+            Visual::Fraction(bar_size) => {
+                // `\binom`/`\atop` request a zero-thickness rule → ruleless stack.
+                // Any other thickness (incl. the default `None`) draws the rule.
+                let bar = !matches!(bar_size, Some(d) if d.value == 0.0);
+                let num = parse_element(events, cursor, font_size, style, font)?
                     .ok_or_else(|| ParseError("fraction numerator produced no node".into()))?;
-                let den = parse_element(events, cursor, font_size, style)?
+                let den = parse_element(events, cursor, font_size, style, font)?
                     .ok_or_else(|| ParseError("fraction denominator produced no node".into()))?;
                 Ok(Some(Node::Frac {
                     num: Box::new(num),
                     den: Box::new(den),
+                    bar,
                 }))
             }
             Visual::SquareRoot => {
-                let body = parse_element(events, cursor, font_size, style)?
+                let body = parse_element(events, cursor, font_size, style, font)?
                     .ok_or_else(|| ParseError("sqrt body produced no node".into()))?;
                 Ok(Some(Node::Radical {
                     degree: None,
@@ -195,9 +213,9 @@ fn parse_element(
             }
             Visual::Root => {
                 // pulldown-latex order: radicand then index.
-                let body = parse_element(events, cursor, font_size, style)?
+                let body = parse_element(events, cursor, font_size, style, font)?
                     .ok_or_else(|| ParseError("root radicand produced no node".into()))?;
-                let degree = parse_element(events, cursor, font_size, style)?
+                let degree = parse_element(events, cursor, font_size, style, font)?
                     .ok_or_else(|| ParseError("root index produced no node".into()))?;
                 Ok(Some(Node::Radical {
                     degree: Some(Box::new(degree)),
@@ -213,25 +231,45 @@ fn parse_element(
     }
 }
 
-fn content_to_node(c: Content, font_size: f32, style: Style) -> Result<Node, ParseError> {
+fn content_to_node(
+    c: Content,
+    font_size: f32,
+    style: Style,
+    font: Option<Font>,
+) -> Result<Node, ParseError> {
     // Note: we store the BASE font_size on Node::Atom / Node::Op (not
     // style-scaled). The boxer applies `style.font_size(base)` at layout time
     // so script-style atoms actually render at script-scale glyph metrics.
     let size = font_size;
+    // Apply an active `\mathbb`/`\mathcal`/… font variant to a letter/digit,
+    // falling back to the original char if the styled codepoint has no glyph.
+    let styled = |ch: char| -> char {
+        match font {
+            Some(f) => {
+                let m = font::map_variant(f, ch);
+                if m != ch && font::glyph_id(m).is_some() {
+                    m
+                } else {
+                    ch
+                }
+            }
+            None => ch,
+        }
+    };
     // Most content variants produce a single atom; string-bearing variants
     // (Number, Text, Function) wrap multiple atoms in a Row.
     match c {
-        Content::Ordinary { content, .. } => atom_node(content, AtomClass::Ord, size),
-        Content::Number(s) => chars_to_node(s.chars(), AtomClass::Ord, size),
-        Content::Text(s) => chars_to_node(s.chars(), AtomClass::Ord, size),
+        Content::Ordinary { content, .. } => atom_node(styled(content), AtomClass::Ord, size),
+        Content::Number(s) => chars_to_node(s.chars().map(styled), AtomClass::Ord, size),
+        Content::Text(s) => chars_to_node(s.chars().map(styled), AtomClass::Ord, size),
         Content::Function(s) => function_node(s, size),
-        Content::BinaryOp { content, .. } => atom_node(content, AtomClass::Bin, size),
+        Content::BinaryOp { content, .. } => atom_node(styled(content), AtomClass::Bin, size),
         Content::Relation { content, .. } => {
             let mut buf = [0u8; 8];
             let bytes = content.encode_utf8_to_buf(&mut buf);
             let s = std::str::from_utf8(bytes)
                 .map_err(|e| ParseError(format!("relation utf8: {e}")))?;
-            chars_to_node(s.chars(), AtomClass::Rel, size)
+            chars_to_node(s.chars().map(styled), AtomClass::Rel, size)
         }
         Content::Delimiter { content, ty, .. } => {
             let class = match ty {
@@ -327,11 +365,16 @@ fn parse_matrix_env(
     cursor: &mut usize,
     font_size: f32,
     style: Style,
+    font: Option<Font>,
     col_aligns: Vec<ColAlign>,
 ) -> Result<Node, ParseError> {
     let mut rows: Vec<Vec<Node>> = Vec::new();
     let mut row: Vec<Node> = Vec::new();
     let mut cell: Vec<Node> = Vec::new();
+    // Font state-changes are reset by `NewLine`/`Alignment` (pulldown invariant),
+    // so track per-cell, seeding from the font active outside the environment.
+    let env_font = font;
+    let mut font = font;
 
     let finish_cell = |cell: &mut Vec<Node>, row: &mut Vec<Node>| {
         let n = match cell.len() {
@@ -359,18 +402,26 @@ fn parse_matrix_env(
             Event::EnvironmentFlow(EnvironmentFlow::Alignment) => {
                 *cursor += 1;
                 finish_cell(&mut cell, &mut row);
+                font = env_font;
             }
             Event::EnvironmentFlow(EnvironmentFlow::NewLine { .. }) => {
                 *cursor += 1;
                 finish_cell(&mut cell, &mut row);
                 rows.push(std::mem::take(&mut row));
+                font = env_font;
             }
             // StartLines and other flow markers: ignore (no hline rendering yet).
             Event::EnvironmentFlow(_) => {
                 *cursor += 1;
             }
+            // A cell-local `\mathbb`/… applies to the rest of this cell.
+            Event::StateChange(StateChange::Font(f)) => {
+                let f = *f;
+                *cursor += 1;
+                font = f;
+            }
             _ => {
-                if let Some(n) = parse_element(events, cursor, font_size, style)? {
+                if let Some(n) = parse_element(events, cursor, font_size, style, font)? {
                     cell.push(n);
                 }
             }
@@ -523,11 +574,31 @@ mod tests {
         let ir = to_ir(r"\frac{1}{2}", 16.0, Style::Text).unwrap();
         let Node::Row(items) = ir else { panic!() };
         assert_eq!(items.len(), 1);
-        let Node::Frac { num, den } = &items[0] else {
+        let Node::Frac { num, den, bar } = &items[0] else {
             panic!("expected Frac")
         };
         assert!(matches!(num.as_ref(), Node::Row(_)));
         assert!(matches!(den.as_ref(), Node::Row(_)));
+        assert!(*bar, "\\frac draws a rule");
+    }
+
+    #[test]
+    fn binom_is_ruleless_frac_in_parens() {
+        // \binom{n}{k} → Fenced parens wrapping a ruleless Frac.
+        let ir = to_ir(r"\binom{n}{k}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Fenced { body, .. } = &items[0] else {
+            panic!("expected Fenced parens, got {:?}", items[0])
+        };
+        fn find_frac(n: &Node) -> Option<bool> {
+            match n {
+                Node::Frac { bar, .. } => Some(*bar),
+                Node::Row(items) => items.iter().find_map(find_frac),
+                Node::Fenced { body, .. } => find_frac(body),
+                _ => None,
+            }
+        }
+        assert_eq!(find_frac(body), Some(false), "\\binom must be ruleless");
     }
 
     #[test]
@@ -767,6 +838,65 @@ mod tests {
             "\\vec must be an Accent, not a Subsup: got {:?}",
             items[0]
         );
+    }
+
+    // --- parse_mathfont.rs ---
+    fn first_glyph(src: &str) -> GlyphId {
+        let ir = to_ir(src, 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        fn dig(n: &Node) -> Option<GlyphId> {
+            match n {
+                Node::Atom { glyph, .. } => Some(*glyph),
+                Node::Row(items) => items.iter().find_map(dig),
+                _ => None,
+            }
+        }
+        dig(&items[0]).expect("expected an atom glyph")
+    }
+
+    #[test]
+    fn mathbb_remaps_to_blackboard_glyph() {
+        // \mathbb{R} must resolve to ℝ (U+211D), a different glyph than plain R.
+        let bb = first_glyph(r"\mathbb{R}");
+        let plain = first_glyph("R");
+        assert_ne!(bb, plain, "\\mathbb{{R}} should differ from plain R");
+        assert_eq!(bb, font::glyph_id('ℝ').unwrap());
+    }
+
+    #[test]
+    fn mathcal_remaps_to_script_glyph() {
+        // \mathcal{L} → ℒ (U+2112).
+        let cal = first_glyph(r"\mathcal{L}");
+        assert_ne!(cal, first_glyph("L"));
+        assert_eq!(cal, font::glyph_id('ℒ').unwrap());
+    }
+
+    #[test]
+    fn mathbb_applies_across_group() {
+        // Every letter in the braced group is styled.
+        let ir = to_ir(r"\mathbb{RN}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Row(inner) = &items[0] else {
+            panic!("expected braced Row, got {:?}", items[0])
+        };
+        let g = |n: &Node| match n {
+            Node::Atom { glyph, .. } => *glyph,
+            _ => panic!("expected atom"),
+        };
+        assert_eq!(g(&inner[0]), font::glyph_id('ℝ').unwrap());
+        assert_eq!(g(&inner[1]), font::glyph_id('ℕ').unwrap());
+    }
+
+    #[test]
+    fn mathbb_state_does_not_leak_past_group() {
+        // R after \mathbb{N} is plain again.
+        let ir = to_ir(r"\mathbb{N}R", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let last = match items.last().unwrap() {
+            Node::Atom { glyph, .. } => *glyph,
+            other => panic!("expected trailing plain atom, got {:?}", other),
+        };
+        assert_eq!(last, font::glyph_id('R').unwrap(), "font must not leak past group");
     }
 
     #[test]

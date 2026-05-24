@@ -15,6 +15,9 @@ pub enum Node {
     Frac {
         num: Box<Node>,
         den: Box<Node>,
+        /// Draw the horizontal fraction rule. `false` for `\binom`/`\atop`
+        /// (ruleless stack), `true` for ordinary `\frac`.
+        bar: bool,
     },
     Subsup {
         base: Box<Node>,

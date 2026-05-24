@@ -90,7 +90,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
             }
         }
         Node::Row(items) => layout_row(items, style),
-        Node::Frac { num, den } => layout_frac(num, den, style),
+        Node::Frac { num, den, bar } => layout_frac(num, den, *bar, style),
         Node::Subsup { base, sub, sup } => {
             layout_subsup(base, sub.as_deref(), sup.as_deref(), style)
         }
@@ -782,7 +782,7 @@ fn layout_row(items: &[Node], style: Style) -> Box {
 /// Layout `\frac{num}{den}`. The resulting box's **baseline coincides with
 /// the math axis line**; the rule is centered on that axis. See the module
 /// doc-comment for the y-down convention.
-fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
+fn layout_frac(num: &Node, den: &Node, bar: bool, style: Style) -> Box {
     use crate::font::{math_constant, MathConstant};
 
     // Sub-styles: display fracs keep num/den at text style; otherwise step down.
@@ -886,15 +886,17 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     let den_top = den_baseline_y - d.height;
     let rule_top = axis_y - rule_thickness / 2.0;
 
-    let children = vec![
-        Child {
-            offset: Point {
-                x: num_x,
-                y: num_top,
-            },
-            child: n,
+    let mut children = vec![Child {
+        offset: Point {
+            x: num_x,
+            y: num_top,
         },
-        Child {
+        child: n,
+    }];
+    // `\binom`/`\atop` are ruleless: keep the same axis gaps (so the stack
+    // spacing matches `\frac`) but omit the visible rule rectangle.
+    if bar {
+        children.push(Child {
             offset: Point {
                 x: 0.0,
                 y: rule_top,
@@ -907,15 +909,15 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
                     thickness: rule_thickness,
                 },
             },
+        });
+    }
+    children.push(Child {
+        offset: Point {
+            x: den_x,
+            y: den_top,
         },
-        Child {
-            offset: Point {
-                x: den_x,
-                y: den_top,
-            },
-            child: d,
-        },
-    ];
+        child: d,
+    });
 
     Box {
         width,
