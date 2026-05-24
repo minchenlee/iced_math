@@ -223,19 +223,51 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
     };
 
     let surd_w = surd_box.width;
+    // Total glyph extent (ascent + descent). The surd's ink TOP edge is its
+    // box top (y = box_top); the long diagonal descends to box_top + surd_h.
     let surd_h = surd_box.height + surd_box.depth;
     let body_w = body_box.width;
     let body_h = body_box.height;
     let body_d = body_box.depth;
 
-    // Total vertical extent above baseline: at least rule + gap + body.height.
-    let inner_ascent = rule_thickness + gap + body_h;
-    let parent_height = surd_box.height.max(inner_ascent);
-    let parent_depth = body_d.max(surd_box.depth);
+    // KaTeX/TeX geometry (y-down):
+    //
+    //   - The vinculum (overline rule) starts at the surd's advance width
+    //     (x = surd_w) and runs across the radicand.
+    //   - The surd glyph is positioned so its TOP edge (the peak / hook, the
+    //     glyph's y_max) coincides exactly with the vinculum's TOP. In Latin
+    //     Modern Math the surd's top-right ink reaches the advance width, so
+    //     aligning glyph-top to rule-top fuses the hook, stem and vinculum
+    //     into one continuous stroke — no separate connector rect needed.
+    //   - The radicand sits to the right of the surd, its top `gap` below the
+    //     vinculum's bottom. The surd must descend far enough to cover the
+    //     radicand's full height+depth below the vinculum.
+    //
+    // Lay everything out relative to the vinculum top = `rule_y`, then derive
+    // the parent baseline from the radicand (so the radical composes in rows).
+    //
+    // Required surd extent below the vinculum top: rule + gap + body(h+d).
+    let inner_below_rule = rule_thickness + gap + body_h + body_d;
+    // If the chosen surd is shorter than needed, the radicand would poke below
+    // the surd's diagonal; clamp the effective extent so the box stays
+    // consistent (the variant picker already aims for >= this, but the base
+    // glyph may fall short for very tall radicands).
+    let surd_below_rule = surd_h.max(inner_below_rule);
 
-    let rule_y = parent_height - body_h - gap - rule_thickness;
-    let body_y = parent_height - body_h;
-    let surd_y = parent_height - surd_box.height;
+    // Surd box top sits at the vinculum top. Place the vinculum so the surd's
+    // top doesn't go above the box: rule_y >= 0.
+    // Body baseline = body_top + body_h. We choose rule_y so that the body
+    // clears the rule by `gap`:  body_top = rule_y + rule_thickness + gap.
+    // The parent baseline is the body baseline.
+    let rule_y = 0.0_f32;
+    let body_y = rule_y + rule_thickness + gap;
+    let surd_y = rule_y; // glyph top edge meets vinculum top
+
+    let parent_height = body_y + body_h;
+    // Depth: whichever descends further below the baseline — radicand or surd.
+    let surd_bottom = surd_y + surd_below_rule;
+    let body_bottom = body_y + body_h + body_d;
+    let parent_depth = (surd_bottom.max(body_bottom) - parent_height).max(0.0);
 
     let mut children = vec![
         Child {
@@ -258,33 +290,6 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
         },
     ];
 
-    // Vertical connector: when the surd glyph's bounding box top sits below
-    // the overline (parent_height > surd_h), there is a visible gap between
-    // the surd's hook/peak and the start of the vinculum. Bridge it with a
-    // thin vertical rule aligned to the right edge of the surd, spanning from
-    // `rule_y` (top of overline) down to `surd_y` (top of surd bbox) with a
-    // small overlap to avoid hairline seams. Mirrors KaTeX's approach of
-    // extending the surd stem to meet the vinculum.
-    if surd_y > rule_y {
-        let overlap = rule_thickness;
-        let connector_h = surd_y - rule_y + overlap;
-        let connector_x = (surd_w - rule_thickness).max(0.0);
-        children.push(Child {
-            offset: Point {
-                x: connector_x,
-                y: rule_y,
-            },
-            child: Box {
-                width: rule_thickness,
-                height: connector_h,
-                depth: 0.0,
-                kind: BoxKind::Rule {
-                    thickness: connector_h,
-                },
-            },
-        });
-    }
-
     children.push(Child {
         offset: Point {
             x: surd_w,
@@ -304,7 +309,11 @@ fn layout_radical(degree: Option<&Node>, body: &Node, style: Style) -> Box {
         let kern_after = math_constant(MathConstant::RadicalKernAfterDegree, base_size).max(0.0);
         let raise_pct = math_constant(MathConstant::RadicalDegreeBottomRaisePercent, base_size);
         let deg_h = deg_box.height;
-        let deg_y = (parent_height - (surd_h * raise_pct) - deg_h).max(0.0);
+        // Raise the degree so its bottom sits `raise_pct` of the surd's total
+        // height above the surd's lowest point. Surd spans [surd_y,
+        // surd_y + surd_below_rule] in parent coords.
+        let surd_bottom_y = surd_y + surd_below_rule;
+        let deg_y = (surd_bottom_y - (surd_below_rule * raise_pct) - deg_h).max(0.0);
         let shift = deg_box.width + kern_after;
         for ch in &mut children {
             ch.offset.x += shift;
