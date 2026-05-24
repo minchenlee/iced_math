@@ -504,14 +504,24 @@ fn layout_matrix(rows: &[Vec<Node>], col_aligns: &[crate::ir::ColAlign], style: 
     use crate::ir::ColAlign;
 
     if rows.is_empty() {
-        return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+        return Box {
+            width: 0.0,
+            height: 0.0,
+            depth: 0.0,
+            kind: BoxKind::Empty,
+        };
     }
 
     // Lay out every cell; track grid dimensions.
     let ncols = rows.iter().map(|r| r.len()).max().unwrap_or(0);
     let nrows = rows.len();
     if ncols == 0 {
-        return Box { width: 0.0, height: 0.0, depth: 0.0, kind: BoxKind::Empty };
+        return Box {
+            width: 0.0,
+            height: 0.0,
+            depth: 0.0,
+            kind: BoxKind::Empty,
+        };
     }
 
     let mut cells: Vec<Vec<Option<Box>>> = Vec::with_capacity(nrows);
@@ -590,7 +600,10 @@ fn layout_matrix(rows: &[Vec<Node>], col_aligns: &[crate::ir::ColAlign], style: 
             // (row_baseline - b.height) measured from grid top.
             let cell_y = row_baseline[r] - b.height;
             children.push(Child {
-                offset: Point { x: cell_x, y: cell_y },
+                offset: Point {
+                    x: cell_x,
+                    y: cell_y,
+                },
                 child: b,
             });
         }
@@ -1233,9 +1246,12 @@ mod tests {
             &parse::to_ir("sin", 16.0, Style::Text).unwrap(),
             Style::Text,
         );
-        assert!((func.width - plain.width).abs() < 0.01,
+        assert!(
+            (func.width - plain.width).abs() < 0.01,
             "\\sin width {} must equal plain 'sin' width {} (no inter-letter spacing)",
-            func.width, plain.width);
+            func.width,
+            plain.width
+        );
     }
 
     #[test]
@@ -1250,17 +1266,24 @@ mod tests {
             &parse::to_ir("sinx", 16.0, Style::Text).unwrap(),
             Style::Text,
         );
-        assert!(with_op.width > tight.width,
+        assert!(
+            with_op.width > tight.width,
             "\\sin x ({}) should exceed tight 'sinx' ({}) by Op spacing",
-            with_op.width, tight.width);
+            with_op.width,
+            tight.width
+        );
     }
 
     // --- boxer_matrix.rs ---
     #[test]
     fn matrix_grid_has_rows_and_cols() {
         let b = layout(
-            &parse::to_ir(r"\begin{matrix} a & b \\ c & d \end{matrix}", 16.0, Style::Text)
-                .unwrap(),
+            &parse::to_ir(
+                r"\begin{matrix} a & b \\ c & d \end{matrix}",
+                16.0,
+                Style::Text,
+            )
+            .unwrap(),
             Style::Text,
         );
         // Grid renders with positive extent and four glyph leaves (a,b,c,d).
@@ -1271,9 +1294,7 @@ mod tests {
     fn count_glyphs(b: &Box) -> usize {
         match &b.kind {
             BoxKind::Glyph { .. } => 1,
-            BoxKind::HBox(c) | BoxKind::VBox(c) => {
-                c.iter().map(|ch| count_glyphs(&ch.child)).sum()
-            }
+            BoxKind::HBox(c) | BoxKind::VBox(c) => c.iter().map(|ch| count_glyphs(&ch.child)).sum(),
             _ => 0,
         }
     }
@@ -1288,7 +1309,12 @@ mod tests {
             &parse::to_ir(r"\begin{matrix} a & b & c \end{matrix}", 16.0, Style::Text).unwrap(),
             Style::Text,
         );
-        assert!(three.width > two.width, "3 cols ({}) wider than 2 ({})", three.width, two.width);
+        assert!(
+            three.width > two.width,
+            "3 cols ({}) wider than 2 ({})",
+            three.width,
+            two.width
+        );
     }
 
     #[test]
@@ -1301,8 +1327,12 @@ mod tests {
             &parse::to_ir(r"\begin{matrix} a \\ b \end{matrix}", 16.0, Style::Text).unwrap(),
             Style::Text,
         );
-        assert!(two.height + two.depth > one.height + one.depth,
-            "2 rows ({}) taller than 1 ({})", two.height + two.depth, one.height + one.depth);
+        assert!(
+            two.height + two.depth > one.height + one.depth,
+            "2 rows ({}) taller than 1 ({})",
+            two.height + two.depth,
+            one.height + one.depth
+        );
     }
 
     // --- boxer_accents.rs ---
@@ -1313,9 +1343,12 @@ mod tests {
             &parse::to_ir(r"\hat{x}", 16.0, Style::Text).unwrap(),
             Style::Text,
         );
-        assert!(hat.height > x.height,
+        assert!(
+            hat.height > x.height,
             "\\hat{{x}} ({}) must be taller than bare x ({}) — accent sits above",
-            hat.height, x.height);
+            hat.height,
+            x.height
+        );
     }
 
     #[test]
@@ -1326,8 +1359,12 @@ mod tests {
             &parse::to_ir(r"\hat{x}", 16.0, Style::Text).unwrap(),
             Style::Text,
         );
-        assert!((hat.width - x.width).abs() < 0.01,
-            "accent width {} should equal body width {}", hat.width, x.width);
+        assert!(
+            (hat.width - x.width).abs() < 0.01,
+            "accent width {} should equal body width {}",
+            hat.width,
+            x.width
+        );
     }
 
     #[test]
@@ -1340,8 +1377,11 @@ mod tests {
             &parse::to_ir(r"\lim_{x \to 0}", 16.0, Style::Display).unwrap(),
             Style::Display,
         );
-        assert!(stacked.depth > bare.depth,
+        assert!(
+            stacked.depth > bare.depth,
             "\\lim with display subscript must stack underneath (more depth): bare.d={} lim.d={}",
-            bare.depth, stacked.depth);
+            bare.depth,
+            stacked.depth
+        );
     }
 }

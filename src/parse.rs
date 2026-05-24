@@ -97,13 +97,15 @@ fn parse_element(
     match ev {
         Event::Content(c) => Ok(Some(content_to_node(c, font_size, style, font)?)),
         Event::Begin(Grouping::Normal) => {
-            let inner =
-                parse_until_end(events, cursor, font_size, style, font, /* in_group */ true)?;
+            let inner = parse_until_end(
+                events, cursor, font_size, style, font, /* in_group */ true,
+            )?;
             Ok(Some(Node::Row(inner)))
         }
         Event::Begin(Grouping::LeftRight(open_opt, close_opt)) => {
-            let inner =
-                parse_until_end(events, cursor, font_size, style, font, /* in_group */ true)?;
+            let inner = parse_until_end(
+                events, cursor, font_size, style, font, /* in_group */ true,
+            )?;
             // v0.1: base glyph IDs only — boxer will swap to vertical variants
             // sized to body height. `\left.`/`\right.` (None) → GlyphId(0) sentinel,
             // which the boxer treats as no-op (invisible delimiter).
@@ -132,8 +134,9 @@ fn parse_element(
                 return Ok(Some(m));
             }
             // Unknown grouping: consume to matching End to stay balanced.
-            let inner =
-                parse_until_end(events, cursor, font_size, style, font, /* in_group */ true)?;
+            let inner = parse_until_end(
+                events, cursor, font_size, style, font, /* in_group */ true,
+            )?;
             Ok(Some(Node::Row(inner)))
         }
         Event::End => Err(ParseError("unexpected End outside group".into())),
@@ -336,9 +339,7 @@ fn matrix_col_aligns(g: &Grouping) -> Option<Vec<ColAlign>> {
         // cases / rcases: two left-aligned columns (value, condition).
         Grouping::Cases { .. } => Some(vec![ColAlign::Left, ColAlign::Left]),
         // aligned / split: right, left, right, left … pairs.
-        Grouping::Aligned | Grouping::Split => {
-            Some(vec![ColAlign::Right, ColAlign::Left])
-        }
+        Grouping::Aligned | Grouping::Split => Some(vec![ColAlign::Right, ColAlign::Left]),
         Grouping::Array(cols) => {
             let aligns: Vec<ColAlign> = cols
                 .iter()
@@ -446,8 +447,18 @@ fn peek_accent_char(events: &[Event], idx: usize) -> Option<char> {
 fn is_limit_op(name: &str) -> bool {
     matches!(
         name,
-        "lim" | "limsup" | "liminf" | "max" | "min" | "sup" | "inf" | "det" | "gcd"
-            | "Pr" | "argmax" | "argmin"
+        "lim"
+            | "limsup"
+            | "liminf"
+            | "max"
+            | "min"
+            | "sup"
+            | "inf"
+            | "det"
+            | "gcd"
+            | "Pr"
+            | "argmax"
+            | "argmin"
     )
 }
 
@@ -741,7 +752,9 @@ mod tests {
         };
         assert_eq!(letters.len(), 3, "s i n");
         for l in letters {
-            let Node::Atom { class, .. } = l else { panic!() };
+            let Node::Atom { class, .. } = l else {
+                panic!()
+            };
             assert_eq!(
                 *class,
                 AtomClass::Ord,
@@ -763,8 +776,12 @@ mod tests {
     // --- parse_matrix.rs ---
     #[test]
     fn parses_2x2_matrix() {
-        let ir = to_ir(r"\begin{matrix} a & b \\ c & d \end{matrix}", 16.0, Style::Text)
-            .unwrap();
+        let ir = to_ir(
+            r"\begin{matrix} a & b \\ c & d \end{matrix}",
+            16.0,
+            Style::Text,
+        )
+        .unwrap();
         let Node::Row(items) = ir else { panic!() };
         let Node::Matrix { rows, .. } = &items[0] else {
             panic!("expected Matrix, got {:?}", items[0])
@@ -782,7 +799,10 @@ mod tests {
             panic!("expected Fenced wrapping the matrix, got {:?}", items[0])
         };
         // LeftRight wraps its contents in a Row; the matrix is inside.
-        assert!(contains_matrix(body), "Fenced body must contain a Matrix: {body:?}");
+        assert!(
+            contains_matrix(body),
+            "Fenced body must contain a Matrix: {body:?}"
+        );
     }
 
     fn contains_matrix(n: &Node) -> bool {
@@ -795,11 +815,18 @@ mod tests {
 
     #[test]
     fn cases_is_left_braced_matrix() {
-        let ir = to_ir(r"\begin{cases} x & a \\ y & b \end{cases}", 16.0, Style::Text)
-            .unwrap();
+        let ir = to_ir(
+            r"\begin{cases} x & a \\ y & b \end{cases}",
+            16.0,
+            Style::Text,
+        )
+        .unwrap();
         let Node::Row(items) = ir else { panic!() };
         let Node::Fenced { body, .. } = &items[0] else {
-            panic!("expected Fenced (left brace) wrapping matrix, got {:?}", items[0])
+            panic!(
+                "expected Fenced (left brace) wrapping matrix, got {:?}",
+                items[0]
+            )
         };
         let Node::Matrix { rows, col_aligns } = body.as_ref() else {
             panic!("expected Matrix inside cases")
@@ -896,14 +923,21 @@ mod tests {
             Node::Atom { glyph, .. } => *glyph,
             other => panic!("expected trailing plain atom, got {:?}", other),
         };
-        assert_eq!(last, font::glyph_id('R').unwrap(), "font must not leak past group");
+        assert_eq!(
+            last,
+            font::glyph_id('R').unwrap(),
+            "font must not leak past group"
+        );
     }
 
     #[test]
     fn lim_subscript_wraps_opname_base() {
         let ir = to_ir(r"\lim_{x}", 16.0, Style::Display).unwrap();
         let Node::Row(items) = ir else { panic!() };
-        let Node::Subsup { base, sub: Some(_), .. } = &items[0] else {
+        let Node::Subsup {
+            base, sub: Some(_), ..
+        } = &items[0]
+        else {
             panic!("expected Subsup, got {:?}", items[0])
         };
         let Node::OpName { limits, .. } = base.as_ref() else {

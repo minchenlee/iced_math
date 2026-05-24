@@ -59,7 +59,9 @@ pub fn map_variant(font: pulldown_latex::event::Font, c: char) -> char {
         (Font::Fraktur, 'Z') => c as u32 + 0x20CE,
         (Font::Fraktur, 'a'..='z') => c as u32 + 0x1D4BD,
         // Script (calligraphic) — \mathcal
-        (Font::Script, 'A' | 'C' | 'D' | 'G' | 'J' | 'K' | 'N'..='Q' | 'S'..='Z') => c as u32 + 0x1D45B,
+        (Font::Script, 'A' | 'C' | 'D' | 'G' | 'J' | 'K' | 'N'..='Q' | 'S'..='Z') => {
+            c as u32 + 0x1D45B
+        }
         (Font::Script, 'B') => c as u32 + 0x20EA,
         (Font::Script, 'E' | 'F') => c as u32 + 0x20EB,
         (Font::Script, 'H') => c as u32 + 0x20C3,
@@ -80,7 +82,9 @@ pub fn map_variant(font: pulldown_latex::event::Font, c: char) -> char {
         (Font::SansSerif, 'a'..='z') => c as u32 + 0x1D559,
         (Font::SansSerif, '0'..='9') => c as u32 + 0x1D7B2,
         // Double Struck — \mathbb
-        (Font::DoubleStruck, 'A' | 'B' | 'D'..='G' | 'I'..='M' | 'O' | 'S'..='Y') => c as u32 + 0x1D4F7,
+        (Font::DoubleStruck, 'A' | 'B' | 'D'..='G' | 'I'..='M' | 'O' | 'S'..='Y') => {
+            c as u32 + 0x1D4F7
+        }
         (Font::DoubleStruck, 'C') => c as u32 + 0x20BF,
         (Font::DoubleStruck, 'H') => c as u32 + 0x20C5,
         (Font::DoubleStruck, 'N') => c as u32 + 0x20C7,
@@ -121,16 +125,16 @@ pub fn map_variant(font: pulldown_latex::event::Font, c: char) -> char {
 /// `None` if the character isn't a recognized accent.
 pub fn accent_glyph(ch: char) -> Option<GlyphId> {
     let combining = match ch {
-        '^' | '\u{0302}' | 'ˆ' => '\u{0302}',  // \hat
-        '~' | '\u{0303}' | '˜' => '\u{0303}',  // \tilde
+        '^' | '\u{0302}' | 'ˆ' => '\u{0302}', // \hat
+        '~' | '\u{0303}' | '˜' => '\u{0303}', // \tilde
         '‾' | '¯' | '\u{0304}' => '\u{0304}', // \bar (¯ = U+00AF)
-        '→' | '\u{20D7}' => '\u{20D7}',        // \vec
-        '˙' | '\u{0307}' => '\u{0307}',        // \dot
-        '¨' | '\u{0308}' => '\u{0308}',        // \ddot
-        'ˇ' | '\u{030C}' => '\u{030C}',        // \check
-        '˘' | '\u{0306}' => '\u{0306}',        // \breve
-        '´' | '\u{0301}' => '\u{0301}',        // \acute
-        '`' | '\u{0300}' => '\u{0300}',        // \grave
+        '→' | '\u{20D7}' => '\u{20D7}',       // \vec
+        '˙' | '\u{0307}' => '\u{0307}',       // \dot
+        '¨' | '\u{0308}' => '\u{0308}',       // \ddot
+        'ˇ' | '\u{030C}' => '\u{030C}',       // \check
+        '˘' | '\u{0306}' => '\u{0306}',       // \breve
+        '´' | '\u{0301}' => '\u{0301}',       // \acute
+        '`' | '\u{0300}' => '\u{0300}',       // \grave
         _ => return None,
     };
     face().glyph_index(combining)
@@ -430,8 +434,8 @@ mod tests {
     #[test]
     fn returns_largest_when_target_exceeds_all_variants() {
         let id = glyph_id('∫').unwrap();
-        let (variant, h) = math_variant_vertical(id, 1e9)
-            .expect("should fall back to largest variant, not None");
+        let (variant, h) =
+            math_variant_vertical(id, 1e9).expect("should fall back to largest variant, not None");
         assert!(
             variant != id,
             "should return a non-base variant; got base glyph"

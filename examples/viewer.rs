@@ -45,17 +45,29 @@ impl App {
             (r"\sum_{i=1}^{n} i = \frac{n(n+1)}{2}", true),
             (r"\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}", true),
             (r"\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}", true),
-            (r"f(x) = \frac{1}{\sqrt{2\pi\sigma^2}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}", true),
+            (
+                r"f(x) = \frac{1}{\sqrt{2\pi\sigma^2}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}",
+                true,
+            ),
             // v0.3: named operators, accents, matrices.
             (r"\lim_{x \to 0} \frac{\sin x}{x} = 1", true),
             (r"\cos^2\theta + \sin^2\theta = 1", false),
             (r"\vec{F} = m\,\vec{a}", false),
             (r"\hat{p}\,\psi = -i\hbar\,\nabla\psi", false),
             (r"A = \begin{pmatrix} a & b \\ c & d \end{pmatrix}", true),
-            (r"|x| = \begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}", true),
+            (
+                r"|x| = \begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}",
+                true,
+            ),
             // v0.4: math alphabets + binomials.
-            (r"\mathbb{E}[X] \in \mathbb{R}^n, \quad \mathbb{N} \subset \mathbb{Z}", true),
-            (r"\mathcal{L}(\theta) = \mathbb{E}_{x \sim \mathcal{D}}[\ell(x)]", true),
+            (
+                r"\mathbb{E}[X] \in \mathbb{R}^n, \quad \mathbb{N} \subset \mathbb{Z}",
+                true,
+            ),
+            (
+                r"\mathcal{L}(\theta) = \mathbb{E}_{x \sim \mathcal{D}}[\ell(x)]",
+                true,
+            ),
             (r"\binom{n}{k} = \frac{n!}{k!(n-k)!}", true),
         ];
         let items: Vec<Element<'_, Message>> = entries

@@ -13,7 +13,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("fraction", r"\frac{a + b}{c}", false, Color::BLACK),
         ("radical", r"\sqrt{x^2 + y^2}", false, Color::BLACK),
         ("sum", r"\sum_{i=1}^{n} i^2", true, Color::BLACK),
-        ("colored", r"\frac{1}{2}", false, Color::rgb(0x22, 0x88, 0xff)),
+        (
+            "colored",
+            r"\frac{1}{2}",
+            false,
+            Color::rgb(0x22, 0x88, 0xff),
+        ),
     ];
 
     let out_dir = Path::new("to_svg_out");
@@ -31,7 +36,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Show a complete SVG inline so the raw output is visible without opening a file.
     let raw = MathRenderer::new().to_svg(r"\frac{a}{b}")?;
-    println!("\n--- raw SVG for \\frac{{a}}{{b}} ---\n{}", String::from_utf8(raw)?);
+    println!(
+        "\n--- raw SVG for \\frac{{a}}{{b}} ---\n{}",
+        String::from_utf8(raw)?
+    );
 
     Ok(())
 }

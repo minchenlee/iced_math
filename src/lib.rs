@@ -106,8 +106,7 @@ impl MathRenderer {
         } else {
             ir::Style::Text
         };
-        let node = parse::to_ir(src, self.font_size, style)
-            .map_err(|e| Error::Parse(e.0))?;
+        let node = parse::to_ir(src, self.font_size, style).map_err(|e| Error::Parse(e.0))?;
         let b = boxer::layout(&node, style);
         Ok(svg::emit(&b, self.color))
     }
@@ -175,7 +174,10 @@ mod tests {
         let bytes = MathRenderer::new().to_svg("x").unwrap();
         let s = String::from_utf8(bytes).unwrap();
         assert!(s.starts_with("<svg"));
-        assert!(!s.contains("<g fill"), "default black must not wrap in a group");
+        assert!(
+            !s.contains("<g fill"),
+            "default black must not wrap in a group"
+        );
     }
 
     #[test]
