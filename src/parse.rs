@@ -263,3 +263,215 @@ fn chars_to_node<I: Iterator<Item = char>>(
         Ok(Node::Row(nodes))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::{AtomClass, Node, Style};
+
+    // --- parse_atom.rs ---
+    #[test]
+    fn parses_single_letter() {
+        let ir = to_ir("x", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else {
+            panic!("expected Row, got {:?}", ir)
+        };
+        assert_eq!(items.len(), 1);
+        let Node::Atom { class, .. } = &items[0] else {
+            panic!()
+        };
+        assert_eq!(*class, AtomClass::Ord);
+    }
+
+    #[test]
+    fn parses_two_letters_as_row() {
+        let ir = to_ir("xy", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn classifies_plus_as_bin() {
+        let ir = to_ir("a+b", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Atom { class: c2, .. } = &items[1] else {
+            panic!()
+        };
+        assert_eq!(*c2, AtomClass::Bin);
+    }
+
+    // --- parse_fenced.rs ---
+    #[test]
+    fn parses_left_right_paren() {
+        let ir = to_ir(r"\left( x \right)", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert_eq!(items.len(), 1);
+        let Node::Fenced {
+            open: _,
+            close: _,
+            body,
+        } = &items[0]
+        else {
+            panic!("expected Fenced")
+        };
+        assert!(matches!(body.as_ref(), Node::Row(_)));
+    }
+
+    #[test]
+    fn parses_left_right_brackets() {
+        let ir = to_ir(r"\left[ \frac{a}{b} \right]", 16.0, Style::Display).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Fenced { .. } = &items[0] else {
+            panic!("expected Fenced")
+        };
+    }
+
+    #[test]
+    fn parses_left_dot_null_delim() {
+        let ir = to_ir(r"\left. x \right)", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Fenced { open, .. } = &items[0] else {
+            panic!("expected Fenced")
+        };
+        assert_eq!(open.0, 0);
+    }
+
+    // --- parse_frac_sqrt.rs ---
+    #[test]
+    fn parses_frac() {
+        let ir = to_ir(r"\frac{1}{2}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert_eq!(items.len(), 1);
+        let Node::Frac { num, den } = &items[0] else {
+            panic!("expected Frac")
+        };
+        assert!(matches!(num.as_ref(), Node::Row(_)));
+        assert!(matches!(den.as_ref(), Node::Row(_)));
+    }
+
+    #[test]
+    fn parses_sqrt() {
+        let ir = to_ir(r"\sqrt{x}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Radical { degree, body } = &items[0] else {
+            panic!("expected Radical")
+        };
+        assert!(degree.is_none());
+        assert!(matches!(body.as_ref(), Node::Row(_)));
+    }
+
+    #[test]
+    fn parses_sqrt_with_degree() {
+        let ir = to_ir(r"\sqrt[3]{x}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Radical {
+            degree: Some(_),
+            body: _,
+        } = &items[0]
+        else {
+            panic!()
+        };
+    }
+
+    // --- parse_greek_ops.rs ---
+    #[test]
+    fn parses_alpha() {
+        let ir = to_ir(r"\alpha", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert_eq!(items.len(), 1);
+        let Node::Atom { class, .. } = &items[0] else {
+            panic!()
+        };
+        assert_eq!(*class, AtomClass::Ord);
+    }
+
+    #[test]
+    fn parses_capital_gamma() {
+        let ir = to_ir(r"\Gamma", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert_eq!(items.len(), 1);
+    }
+
+    #[test]
+    fn parses_sum_with_limits_in_display() {
+        let ir = to_ir(r"\sum_{i=1}^{n}", 16.0, Style::Display).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Subsup {
+            base,
+            sub: Some(_),
+            sup: Some(_),
+        } = &items[0]
+        else {
+            panic!("expected Subsup wrapping Op")
+        };
+        let Node::Op { limits, big, .. } = base.as_ref() else {
+            panic!("expected Op base")
+        };
+        assert!(*limits, "\\sum in display mode must have limits=true");
+        assert!(*big, "\\sum should pick big variant in display");
+    }
+
+    #[test]
+    fn parses_sum_inline_uses_scripts_not_limits() {
+        let ir = to_ir(r"\sum_{i=1}^{n}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Subsup { base, .. } = &items[0] else {
+            panic!()
+        };
+        let Node::Op { limits, big, .. } = base.as_ref() else {
+            panic!()
+        };
+        assert!(
+            !*limits,
+            "\\sum in text mode must have limits=false (scripts)"
+        );
+        assert!(!*big, "\\sum should NOT pick big variant in text");
+    }
+
+    // --- parse_subsup.rs ---
+    #[test]
+    fn parses_superscript() {
+        let ir = to_ir("x^2", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert_eq!(items.len(), 1);
+        let Node::Subsup { sub, sup, .. } = &items[0] else {
+            panic!("expected Subsup, got {:?}", items[0])
+        };
+        assert!(sub.is_none());
+        assert!(sup.is_some());
+    }
+
+    #[test]
+    fn parses_subscript() {
+        let ir = to_ir("a_i", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Subsup { sub, sup, .. } = &items[0] else {
+            panic!()
+        };
+        assert!(sub.is_some());
+        assert!(sup.is_none());
+    }
+
+    #[test]
+    fn parses_both_sub_and_sup() {
+        let ir = to_ir("a_i^j", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Subsup { sub, sup, .. } = &items[0] else {
+            panic!()
+        };
+        assert!(sub.is_some() && sup.is_some());
+    }
+
+    #[test]
+    fn parses_braced_exponent() {
+        let ir = to_ir("x^{n+1}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Subsup { sup: Some(sup), .. } = &items[0] else {
+            panic!()
+        };
+        let Node::Row(inner) = sup.as_ref() else {
+            panic!("expected Row inside exponent, got {:?}", sup)
+        };
+        assert_eq!(inner.len(), 3, "n + 1 = 3 atoms");
+    }
+}
