@@ -769,3 +769,239 @@ fn approx_font_size(node: &Node) -> f32 {
         _ => 16.0,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::Style;
+    use crate::parse;
+
+    // --- boxer_atom.rs ---
+    #[test]
+    fn single_atom_box_has_expected_width() {
+        let ir = parse::to_ir("x", 16.0, Style::Text).unwrap();
+        let b = layout(&ir, Style::Text);
+        assert!(b.width > 0.0, "x must have positive width");
+        assert!(b.height > 0.0, "x must have positive height");
+    }
+
+    #[test]
+    fn ab_is_wider_than_a() {
+        let a = layout(&parse::to_ir("a", 16.0, Style::Text).unwrap(), Style::Text);
+        let ab = layout(&parse::to_ir("ab", 16.0, Style::Text).unwrap(), Style::Text);
+        assert!(ab.width > a.width);
+    }
+
+    #[test]
+    fn aplusb_wider_than_ab_due_to_med_spacing() {
+        let ab = layout(&parse::to_ir("ab", 16.0, Style::Text).unwrap(), Style::Text);
+        let aplus = layout(
+            &parse::to_ir("a+b", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(
+            aplus.width > ab.width,
+            "a+b should be wider than ab due to Med spacing around +"
+        );
+    }
+
+    // --- boxer_bigop.rs ---
+    #[test]
+    fn sum_display_has_limits_above_below() {
+        let bare = layout(
+            &parse::to_ir(r"\sum", 16.0, Style::Display).unwrap(),
+            Style::Display,
+        );
+        let s = layout(
+            &parse::to_ir(r"\sum_{i=1}^{n}", 16.0, Style::Display).unwrap(),
+            Style::Display,
+        );
+        assert!(
+            s.height > bare.height,
+            "display sum with sup limit should be taller than bare sum: bare.h={} sum.h={}",
+            bare.height,
+            s.height,
+        );
+        assert!(
+            s.depth > bare.depth,
+            "display sum with sub limit should have more depth than bare sum: bare.d={} sum.d={}",
+            bare.depth,
+            s.depth,
+        );
+    }
+
+    // --- boxer_fenced.rs ---
+    #[test]
+    fn fenced_around_frac_uses_taller_paren_variant_than_inline_paren() {
+        let inline = layout(
+            &parse::to_ir("(x)", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let fenced = layout(
+            &parse::to_ir(r"\left(\frac{1}{2}\right)", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(
+            fenced.height > inline.height,
+            "left/right should size to body; got fenced.height={} inline.height={}",
+            fenced.height,
+            inline.height
+        );
+    }
+
+    // --- boxer_frac.rs ---
+    #[test]
+    fn frac_height_exceeds_num_height_alone() {
+        let half = layout(
+            &parse::to_ir(r"\frac{1}{2}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let one = layout(&parse::to_ir("1", 16.0, Style::Text).unwrap(), Style::Text);
+        assert!(
+            half.height + half.depth > one.height,
+            "frac total extent should exceed just the numerator"
+        );
+        assert!(
+            half.depth > 0.0,
+            "frac should have nonzero depth (denominator below axis)"
+        );
+    }
+
+    #[test]
+    fn frac_width_at_least_max_of_num_den() {
+        let f = layout(
+            &parse::to_ir(r"\frac{abc}{de}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let num = layout(
+            &parse::to_ir("abc", 16.0, Style::Text).unwrap(),
+            Style::Script,
+        );
+        let den = layout(
+            &parse::to_ir("de", 16.0, Style::Text).unwrap(),
+            Style::Script,
+        );
+        assert!(
+            f.width >= num.width.max(den.width),
+            "frac width {} should be >= max(num_script {}, den_script {})",
+            f.width,
+            num.width,
+            den.width,
+        );
+    }
+
+    #[test]
+    fn frac_baseline_at_axis_sanity() {
+        let f = layout(
+            &parse::to_ir(r"\frac{1}{2}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(
+            f.height + f.depth > 16.0,
+            "frac total ink height should exceed 1em, got {} + {} = {}",
+            f.height,
+            f.depth,
+            f.height + f.depth
+        );
+    }
+
+    #[test]
+    fn row_baselines_align() {
+        let ir = parse::to_ir("a", 16.0, Style::Text).unwrap();
+        let b = layout(&ir, Style::Text);
+        let BoxKind::HBox(children) = &b.kind else {
+            panic!("expected HBox at row top, got {:?}", b.kind);
+        };
+        for c in children {
+            let expected_y = b.height - c.child.height;
+            assert!(
+                (c.offset.y - expected_y).abs() < 0.01,
+                "child top offset should equal parent.height - child.height; got {} expected {}",
+                c.offset.y,
+                expected_y
+            );
+        }
+    }
+
+    // --- boxer_radical.rs ---
+    #[test]
+    fn sqrt_height_exceeds_body_height() {
+        let x = layout(&parse::to_ir("x", 16.0, Style::Text).unwrap(), Style::Text);
+        let s = layout(
+            &parse::to_ir(r"\sqrt{x}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(s.height > x.height);
+    }
+
+    #[test]
+    fn sqrt_with_long_degree_widens_box() {
+        let s_normal = layout(
+            &parse::to_ir(r"\sqrt{x}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let s_long = layout(
+            &parse::to_ir(r"\sqrt[12345]{x}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(
+            s_long.width > s_normal.width + 10.0,
+            "wide degree must widen the parent box: long={} normal={}",
+            s_long.width,
+            s_normal.width,
+        );
+    }
+
+    // --- boxer_subsup.rs ---
+    #[test]
+    fn script_glyph_size_smaller_than_base() {
+        let bx = layout(
+            &parse::to_ir("x^2", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let BoxKind::HBox(top_children) = &bx.kind else {
+            panic!("expected HBox at top, got {:?}", bx.kind);
+        };
+        let subsup = &top_children
+            .last()
+            .expect("at least one child at top")
+            .child;
+        let BoxKind::HBox(inner) = &subsup.kind else {
+            panic!("expected HBox (subsup), got {:?}", subsup.kind);
+        };
+        let sup_child = inner.last().expect("subsup should have at least one child");
+        let BoxKind::Glyph { font_size, .. } = sup_child.child.kind else {
+            panic!("expected glyph for sup, got {:?}", sup_child.child.kind);
+        };
+        assert!(
+            font_size < 16.0,
+            "sup font_size should be < base 16; got {}",
+            font_size
+        );
+        assert!(
+            (font_size - 16.0 * 0.7).abs() < 0.01,
+            "expected ~11.2 (16 * 0.7), got {}",
+            font_size
+        );
+    }
+
+    #[test]
+    fn xsup2_taller_than_x() {
+        let x = layout(&parse::to_ir("x", 16.0, Style::Text).unwrap(), Style::Text);
+        let xs = layout(
+            &parse::to_ir("x^2", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(xs.height > x.height);
+    }
+
+    #[test]
+    fn xsub_has_more_depth_than_x() {
+        let x = layout(&parse::to_ir("x", 16.0, Style::Text).unwrap(), Style::Text);
+        let xs = layout(
+            &parse::to_ir("x_i", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(xs.depth > x.depth);
+    }
+}
