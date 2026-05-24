@@ -7,9 +7,13 @@ fn frac_height_exceeds_num_height_alone() {
         Style::Text,
     );
     let one = boxer::layout(&parse::to_ir("1", 16.0, Style::Text).unwrap(), Style::Text);
+    // Total vertical extent (numerator above the axis + denominator below it)
+    // must exceed a lone glyph. (Per-side `height` alone can be small now that
+    // num/den are placed by ink-clearance from the rule rather than the
+    // font's larger ordinary-baseline shift.)
     assert!(
-        half.height > one.height,
-        "frac should be taller than just the numerator"
+        half.height + half.depth > one.height,
+        "frac total extent should exceed just the numerator"
     );
     assert!(
         half.depth > 0.0,

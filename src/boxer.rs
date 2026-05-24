@@ -602,14 +602,40 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
         )
     };
 
-    // The font's preferred shifts assume ordinary-height num/den. Tall
-    // content (e.g. a numerator containing \sqrt) would otherwise let the
-    // numerator's depth (or denominator's height) cross the rule. Enforce the
-    // MATH GapMin clearance between each child's ink and the rule edge, per
-    // the OpenType MATH / TeX fraction algorithm.
+    // Position num/den by their *ink* relative to the rule, not by the
+    // font's ordinary-baseline preferred shift. The preferred shifts
+    // (FractionNumeratorShiftUp etc.) assume a numerator with normal descent;
+    // a bare digit has zero depth, so honouring the full preferred shift
+    // floats it far above the rule while the GapMin clamp pins the
+    // denominator close — an asymmetric, lopsided fraction.
+    //
+    // Instead: clamp each side so the ink clears the rule by GapMin, and use
+    // the preferred shift only as an *upper* bound on how far the baseline may
+    // sit from the axis. Cap that bound at the symmetric ink gap so both gaps
+    // stay balanced. Tall content (radical numerator) still clears via the
+    // GapMin floor.
     let half_rule = rule_thickness / 2.0;
-    let shift_up = shift_up_pref.max(n.depth + half_rule + num_gap_min);
-    let shift_down = shift_down_pref.max(d.height + half_rule + den_gap_min);
+    // Numerator baseline sits `shift_up` above the rule axis; the numerator's
+    // ink bottom is `shift_up - n.depth` above it. We want that ink bottom a
+    // GapMin above the rule's top edge, so the *baseline* shift is
+    // `n.depth + half_rule + num_gap_min`. Symmetrically for the denominator.
+    // The font's ShiftUp/ShiftDown act only as a lower bound (so ordinary
+    // fractions keep the font's optical baseline placement). For a bare digit
+    // (n.depth = 0) the font ShiftUp is far larger than needed and would float
+    // the numerator high above a denominator pinned by its own GapMin clamp —
+    // so cap the numerator shift at the denominator's required shift to keep
+    // the rule visually centred between the two glyphs.
+    let num_min = n.depth + half_rule + num_gap_min;
+    let den_min = d.height + half_rule + den_gap_min;
+    let shift_down = den_min.max(shift_down_pref);
+    // Mirror the denominator's gap above the rule for the numerator: the gap
+    // between rule-top and numerator-ink-bottom should match the gap between
+    // rule-bottom and denominator-ink-top, unless the numerator's own descent
+    // forces it higher.
+    let den_gap_above_ink = (shift_down - d.height) - half_rule; // = effective den gap
+    let shift_up = num_min
+        .max(n.depth + half_rule + den_gap_above_ink)
+        .min(shift_up_pref.max(num_min));
 
     // Parent baseline (y = parent.height) IS the math axis line.
     //   - num baseline sits at axis - shift_up (above the axis)
