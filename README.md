@@ -4,28 +4,33 @@ Native LaTeX math widget for [Iced](https://iced.rs) 0.14. Pure Rust, **zero Jav
 
 ## Status
 
-Pre-1.0 — API may change. v0.1 supports a Tier 1 LaTeX subset (~50 commands).
+Pre-1.0 — API may change. v0.2 supports a Tier 1 LaTeX subset (~50 commands).
 
 ## Installation
 
 ```toml
 [dependencies]
-iced_math = "0.1"
-iced = { version = "0.14", features = ["svg", "advanced"] }
+iced_math = "0.2"
+iced = { version = "0.14", features = ["wgpu", "tiny-skia"] }
 ```
 
 ## Quickstart
 
 ```rust
+use iced::widget::column;
 use iced::Element;
-use iced_math;
 
-fn view(&self) -> Element<Message> {
-    // Inline math (text-style)
-    iced_math::inline(r"E = mc^2")
+#[derive(Debug, Clone)]
+enum Message {}
 
-    // Or block (display style, centered)
-    // iced_math::block(r"\sum_{i=1}^{n} i = \frac{n(n+1)}{2}")
+fn view(_state: &()) -> Element<'_, Message> {
+    column![
+        // Inline (text-style): sits on a text baseline.
+        iced_math::inline("a^2 + b^2 = c^2"),
+        // Block (display style): centered, larger operators.
+        iced_math::block(r"\int_0^1 x^2 \, dx = \frac{1}{3}"),
+    ]
+    .into()
 }
 ```
 
@@ -34,6 +39,27 @@ See `examples/viewer.rs` for a full demo:
 ```bash
 cargo run --example viewer
 ```
+
+## Without Iced (raw SVG)
+
+The `MathRenderer` builder produces standalone SVG bytes — useful for docs,
+export tools, server rendering, or tests — with no Iced dependency at the call site:
+
+```rust
+let svg: Vec<u8> = iced_math::MathRenderer::new()
+    .font_size(24.0)
+    .display_style(true)
+    .color(iced_math::Color::rgb(0x22, 0x22, 0x22))
+    .to_svg(r"\sqrt{x^2 + y^2}")
+    .expect("valid LaTeX");
+std::fs::write("out.svg", svg).unwrap();
+```
+
+## Stable API
+
+For the `0.x` series the supported public API is: `inline`, `block`,
+`MathRenderer`, `Color`, and `Error`. Everything else is internal and may change
+between minor versions.
 
 ## Supported LaTeX (v0.1)
 
@@ -55,7 +81,7 @@ cargo run --example viewer
 - Unary vs. binary `-`/`+` disambiguation — a leading unary minus gets binary spacing; v0.2
 - `GlyphAssembly` for extra-tall delimiters — v0.2
 - AMS alphabets (`\mathbb`, `\mathfrak`, `\mathcal`) — fall back to the regular glyph; v0.3
-- Color, sizing modes — v0.3
+- Sizing modes (`\scriptstyle`, `\displaystyle` overrides) — v0.3
 
 ## How it works
 

@@ -1,10 +1,21 @@
-//! Native LaTeX math widget for Iced 0.14.
+//! Native LaTeX math widget for Iced 0.14 — pure Rust, zero JavaScript.
 //!
-//! Two entry points:
-//! - [`inline`] for in-line math (text-style sizing).
-//! - [`block`] for display math (centered, larger ops with limits above/below).
+//! # Quick start (Iced)
+//! ```
+//! let _inline = iced_math::inline::<(), iced::Theme, iced::Renderer>("E = mc^2");
+//! let _block = iced_math::block::<(), iced::Theme, iced::Renderer>(r"\int_0^1 x\,dx");
+//! ```
 //!
-//! Returns an [`iced::Element`] you can drop into any view tree.
+//! # Lower-level (no Iced)
+//! Use [`MathRenderer`] to get raw SVG bytes for server-side rendering, export, or tests:
+//! ```
+//! let svg = iced_math::MathRenderer::new().to_svg(r"\frac{a}{b}").unwrap();
+//! ```
+//!
+//! # Stable API
+//! The public surface for the 0.x series is [`inline`], [`block`], [`MathRenderer`],
+//! [`Color`], and [`Error`]. Internal modules (parsing, layout, SVG emission)
+//! are private and may change between minor versions.
 
 pub(crate) static FONT_BYTES: &[u8] = include_bytes!("../assets/LatinModernMath.otf");
 
