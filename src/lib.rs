@@ -8,12 +8,12 @@
 
 pub(crate) static FONT_BYTES: &[u8] = include_bytes!("../assets/LatinModernMath.otf");
 
-pub mod boxer;
-pub mod font;
-pub mod ir;
-pub mod parse;
-pub mod spacing;
-pub mod svg;
+mod boxer;
+mod font;
+mod ir;
+mod parse;
+mod spacing;
+mod svg;
 mod widget;
 
 mod color;
