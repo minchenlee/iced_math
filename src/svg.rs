@@ -5,9 +5,15 @@ use std::fmt::Write;
 use crate::boxer::{Box as MBox, BoxKind, Child, Point};
 use crate::font;
 
+/// Padding (in px) added on every side of the SVG viewport. Box extents are
+/// the ideal ink bounds, but rasterizers antialias a fraction of a pixel
+/// beyond them; without a margin the bottom row of a glyph sitting exactly on
+/// the box edge (e.g. a fraction denominator, depth ≈ 0) gets clipped.
+const PAD: f32 = 1.0;
+
 pub fn emit(root: &MBox) -> Vec<u8> {
-    let w = root.width.max(0.0);
-    let h = (root.height + root.depth).max(0.0);
+    let w = root.width.max(0.0) + 2.0 * PAD;
+    let h = (root.height + root.depth).max(0.0) + 2.0 * PAD;
     let mut out = String::new();
     let _ = write!(
         &mut out,
@@ -15,7 +21,7 @@ pub fn emit(root: &MBox) -> Vec<u8> {
         w = w,
         h = h
     );
-    walk(&mut out, root, Point { x: 0.0, y: 0.0 });
+    walk(&mut out, root, Point { x: PAD, y: PAD });
     out.push_str("</svg>");
     out.into_bytes()
 }
