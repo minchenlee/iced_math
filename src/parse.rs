@@ -182,7 +182,7 @@ fn content_to_node(c: Content, font_size: f32, style: Style) -> Result<Node, Par
         Content::Ordinary { content, .. } => atom_node(content, AtomClass::Ord, size),
         Content::Number(s) => chars_to_node(s.chars(), AtomClass::Ord, size),
         Content::Text(s) => chars_to_node(s.chars(), AtomClass::Ord, size),
-        Content::Function(s) => chars_to_node(s.chars(), AtomClass::Op, size),
+        Content::Function(s) => function_node(s, size),
         Content::BinaryOp { content, .. } => atom_node(content, AtomClass::Bin, size),
         Content::Relation { content, .. } => {
             let mut buf = [0u8; 8];
@@ -236,6 +236,35 @@ fn large_op_node(ch: char, small: bool, font_size: f32, style: Style) -> Result<
 /// `GlyphId(0)`, the sentinel the boxer treats as an invisible delimiter.
 fn delim_glyph(ch: Option<char>) -> GlyphId {
     ch.and_then(font::glyph_id).unwrap_or(GlyphId(0))
+}
+
+/// LaTeX operators that stack their scripts as limits (`\DeclareMathOperator*`).
+/// Everything else (`\sin`, `\cos`, `\log`, …) attaches scripts to the side.
+fn is_limit_op(name: &str) -> bool {
+    matches!(
+        name,
+        "lim" | "limsup" | "liminf" | "max" | "min" | "sup" | "inf" | "det" | "gcd"
+            | "Pr" | "argmax" | "argmin"
+    )
+}
+
+/// Build a multi-letter function name as a single upright operator unit.
+/// The letters are `Ord` atoms (no inter-letter math spacing) wrapped in a Row;
+/// the `OpName` wrapper gives the whole unit `Op`-class spacing externally.
+fn function_node(name: &str, font_size: f32) -> Result<Node, ParseError> {
+    let mut letters = Vec::new();
+    for ch in name.chars() {
+        letters.push(atom_node(ch, AtomClass::Ord, font_size)?);
+    }
+    let body = if letters.len() == 1 {
+        letters.into_iter().next().unwrap()
+    } else {
+        Node::Row(letters)
+    };
+    Ok(Node::OpName {
+        body: Box::new(body),
+        limits: is_limit_op(name),
+    })
 }
 
 fn atom_node(ch: char, class: AtomClass, font_size: f32) -> Result<Node, ParseError> {
@@ -473,5 +502,51 @@ mod tests {
             panic!("expected Row inside exponent, got {:?}", sup)
         };
         assert_eq!(inner.len(), 3, "n + 1 = 3 atoms");
+    }
+
+    // --- parse_functions.rs ---
+    #[test]
+    fn sin_is_opname_non_limits_with_ord_letters() {
+        let ir = to_ir(r"\sin", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::OpName { body, limits } = &items[0] else {
+            panic!("expected OpName, got {:?}", items[0])
+        };
+        assert!(!*limits, "\\sin must not be a limit operator");
+        let Node::Row(letters) = body.as_ref() else {
+            panic!("expected Row of letters, got {:?}", body)
+        };
+        assert_eq!(letters.len(), 3, "s i n");
+        for l in letters {
+            let Node::Atom { class, .. } = l else { panic!() };
+            assert_eq!(
+                *class,
+                AtomClass::Ord,
+                "function letters are Ord (no inter-letter Op spacing)"
+            );
+        }
+    }
+
+    #[test]
+    fn lim_is_opname_with_limits() {
+        let ir = to_ir(r"\lim", 16.0, Style::Display).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::OpName { limits, .. } = &items[0] else {
+            panic!("expected OpName, got {:?}", items[0])
+        };
+        assert!(*limits, "\\lim must be a limit operator");
+    }
+
+    #[test]
+    fn lim_subscript_wraps_opname_base() {
+        let ir = to_ir(r"\lim_{x}", 16.0, Style::Display).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Subsup { base, sub: Some(_), .. } = &items[0] else {
+            panic!("expected Subsup, got {:?}", items[0])
+        };
+        let Node::OpName { limits, .. } = base.as_ref() else {
+            panic!("expected OpName base, got {:?}", base)
+        };
+        assert!(*limits);
     }
 }

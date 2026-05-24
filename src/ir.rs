@@ -37,6 +37,15 @@ pub enum Node {
         big: bool,
         font_size: f32,
     },
+    /// Multi-letter operator name (`\sin`, `\log`, `\lim`). Rendered upright and
+    /// tightly set (no inter-letter math spacing), but behaves as a single `Op`
+    /// atom for inter-atom spacing. `limits: true` (the `\lim`/`\max` family)
+    /// stacks scripts above/below in display style; otherwise scripts attach to
+    /// the side like an ordinary base.
+    OpName {
+        body: Box<Node>,
+        limits: bool,
+    },
     Space(SpaceKind),
     /// Sentinel for parse error — boxer emits red-monospace fallback.
     Error(String),

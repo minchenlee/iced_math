@@ -97,6 +97,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
         Node::Radical { degree, body } => layout_radical(degree.as_deref(), body, style),
         Node::Fenced { open, close, body } => layout_fenced(*open, *close, body, style),
         Node::Op { .. } => layout_op(node, style),
+        Node::OpName { body, .. } => layout(body, style),
         Node::Error(_) => Box {
             width: 0.0,
             height: 0.0,
@@ -118,8 +119,11 @@ pub fn layout(node: &Node, style: Style) -> Box {
 fn layout_subsup(base: &Node, sub: Option<&Node>, sup: Option<&Node>, style: Style) -> Box {
     use crate::font::{math_constant, MathConstant};
 
-    // Limits branch: stack scripts above/below big-op base.
-    if let Node::Op { limits: true, .. } = base {
+    // Limits branch: stack scripts above/below big-op or named-op base.
+    if matches!(
+        base,
+        Node::Op { limits: true, .. } | Node::OpName { limits: true, .. }
+    ) {
         return layout_with_limits(base, sub, sup, style);
     }
 
@@ -445,7 +449,11 @@ fn layout_op(node: &Node, style: Style) -> Box {
 fn layout_with_limits(base: &Node, sub: Option<&Node>, sup: Option<&Node>, style: Style) -> Box {
     use crate::font::{math_constant, MathConstant};
 
-    let b = layout_op(base, style);
+    // Big ops are a single glyph (layout_op); named ops are a row of letters.
+    let b = match base {
+        Node::OpName { body, .. } => layout(body, style),
+        _ => layout_op(base, style),
+    };
     let script_style = style.sub();
     let s_sup = sup.map(|n| layout(n, script_style));
     let s_sub = sub.map(|n| layout(n, script_style));
@@ -747,6 +755,7 @@ fn approx_base_font_size_from_node(n: &Node) -> f32 {
         Node::Subsup { base, .. } => approx_base_font_size_from_node(base),
         Node::Radical { body, .. } => approx_base_font_size_from_node(body),
         Node::Fenced { body, .. } => approx_base_font_size_from_node(body),
+        Node::OpName { body, .. } => approx_base_font_size_from_node(body),
         _ => 16.0,
     }
 }
@@ -754,7 +763,7 @@ fn approx_base_font_size_from_node(n: &Node) -> f32 {
 fn atom_class(node: &Node) -> Option<crate::ir::AtomClass> {
     match node {
         Node::Atom { class, .. } => Some(*class),
-        Node::Op { .. } => Some(crate::ir::AtomClass::Op),
+        Node::Op { .. } | Node::OpName { .. } => Some(crate::ir::AtomClass::Op),
         Node::Fenced { .. } => Some(crate::ir::AtomClass::Inner),
         Node::Frac { .. } | Node::Radical { .. } | Node::Subsup { .. } | Node::Row(_) => {
             Some(crate::ir::AtomClass::Ord)
@@ -1003,5 +1012,55 @@ mod tests {
             Style::Text,
         );
         assert!(xs.depth > x.depth);
+    }
+
+    // --- boxer_functions.rs ---
+    #[test]
+    fn sin_letters_have_no_inter_letter_spacing() {
+        // \sin as one upright op-name unit must be exactly as wide as the bare
+        // glyph row "sin" (Ord letters) — no thin Op-Op spacing between letters.
+        let func = layout(
+            &parse::to_ir(r"\sin", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let plain = layout(
+            &parse::to_ir("sin", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!((func.width - plain.width).abs() < 0.01,
+            "\\sin width {} must equal plain 'sin' width {} (no inter-letter spacing)",
+            func.width, plain.width);
+    }
+
+    #[test]
+    fn sin_applies_op_spacing_to_following_arg() {
+        // \sin x should be wider than the glyphs "sinx" set tight, because the
+        // op-name unit gets Op->Ord thin spacing before its argument.
+        let with_op = layout(
+            &parse::to_ir(r"\sin x", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        let tight = layout(
+            &parse::to_ir("sinx", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(with_op.width > tight.width,
+            "\\sin x ({}) should exceed tight 'sinx' ({}) by Op spacing",
+            with_op.width, tight.width);
+    }
+
+    #[test]
+    fn lim_subscript_stacks_underneath_in_display() {
+        let bare = layout(
+            &parse::to_ir(r"\lim", 16.0, Style::Display).unwrap(),
+            Style::Display,
+        );
+        let stacked = layout(
+            &parse::to_ir(r"\lim_{x \to 0}", 16.0, Style::Display).unwrap(),
+            Style::Display,
+        );
+        assert!(stacked.depth > bare.depth,
+            "\\lim with display subscript must stack underneath (more depth): bare.d={} lim.d={}",
+            bare.depth, stacked.depth);
     }
 }
