@@ -16,6 +16,9 @@ pub mod spacing;
 pub mod svg;
 mod widget;
 
+mod color;
+pub use color::Color;
+
 use iced::advanced::svg::Renderer as SvgRenderer;
 use iced::advanced::text::Renderer as TextRenderer;
 use iced::widget::{container, svg as svg_widget, text};
