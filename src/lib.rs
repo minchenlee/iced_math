@@ -36,7 +36,7 @@ use iced::{Element, Length};
 /// ```
 /// let bytes = iced_math::MathRenderer::new()
 ///     .font_size(24.0)
-///     .display(true)
+///     .display_style(true)
 ///     .color(iced_math::Color::rgb(0x33, 0x33, 0x33))
 ///     .to_svg(r"\frac{1}{2}")
 ///     .unwrap();
@@ -50,7 +50,7 @@ pub struct MathRenderer {
 }
 
 impl MathRenderer {
-    /// A renderer at 16 px, inline (text) style, black fill.
+    /// A renderer at 16 px, text-style (inline), black fill — same defaults as [`inline`].
     pub fn new() -> Self {
         MathRenderer {
             font_size: 16.0,
@@ -68,7 +68,7 @@ impl MathRenderer {
 
     /// `true` = display style (centered, large operators with limits);
     /// `false` = inline text style.
-    pub fn display(mut self, yes: bool) -> Self {
+    pub fn display_style(mut self, yes: bool) -> Self {
         self.display = yes;
         self
     }
@@ -135,12 +135,12 @@ where
     <Theme as text::Catalog>::Class<'a>: From<text::StyleFn<'a, Theme>>,
     Renderer: SvgRenderer + TextRenderer<Font = iced::Font> + 'a,
 {
-    let el = build::<Message, Theme, Renderer>(MathRenderer::new().display(true), src);
+    let el = build::<Message, Theme, Renderer>(MathRenderer::new().display_style(true), src);
     container(el).center_x(Length::Fill).padding(8).into()
 }
 
 fn build<'a, Message, Theme, Renderer>(
-    r: MathRenderer,
+    renderer: MathRenderer,
     src: &str,
 ) -> Element<'a, Message, Theme, Renderer>
 where
@@ -149,7 +149,7 @@ where
     <Theme as text::Catalog>::Class<'a>: From<text::StyleFn<'a, Theme>>,
     Renderer: SvgRenderer + TextRenderer<Font = iced::Font> + 'a,
 {
-    match r.to_svg(src) {
+    match renderer.to_svg(src) {
         Ok(bytes) => widget::from_svg(bytes),
         Err(_) => widget::error_fallback(src.to_string()),
     }
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn to_svg_rejects_bad_font_size() {
-        for bad in [0.0_f32, -1.0, f32::NAN, f32::INFINITY] {
+        for bad in [0.0_f32, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
             let r = MathRenderer::new().font_size(bad);
             assert!(matches!(r.to_svg("x"), Err(Error::InvalidFontSize(_))));
         }

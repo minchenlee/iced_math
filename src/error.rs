@@ -1,7 +1,7 @@
 //! Public error type returned by the low-level rendering API.
 
 /// Errors that can occur while rendering LaTeX math to SVG.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// The LaTeX source failed to parse, or contained a construct with no
     /// glyph / unsupported at this version. Carries a human-readable message.

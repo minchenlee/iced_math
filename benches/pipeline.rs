@@ -22,7 +22,7 @@ fn bench_full_pipeline(c: &mut Criterion) {
         b.iter(|| {
             let ir = parse::to_ir(black_box("E = mc^2"), 16.0, Style::Text).unwrap();
             let bx = boxer::layout(&ir, Style::Text);
-            black_box(svg::emit(&bx));
+            black_box(svg::emit(&bx, iced_math::Color::BLACK));
         });
     });
 }
