@@ -46,6 +46,13 @@ pub enum Node {
         body: Box<Node>,
         limits: bool,
     },
+    /// A math accent (`\hat`, `\vec`, `\bar`, `\tilde`, …): `accent` is a
+    /// combining-accent glyph centered horizontally over `body` and raised to
+    /// sit just above it.
+    Accent {
+        accent: GlyphId,
+        body: Box<Node>,
+    },
     Space(SpaceKind),
     /// Sentinel for parse error — boxer emits red-monospace fallback.
     Error(String),

@@ -98,6 +98,7 @@ pub fn layout(node: &Node, style: Style) -> Box {
         Node::Fenced { open, close, body } => layout_fenced(*open, *close, body, style),
         Node::Op { .. } => layout_op(node, style),
         Node::OpName { body, .. } => layout(body, style),
+        Node::Accent { accent, body } => layout_accent(*accent, body, style),
         Node::Error(_) => Box {
             width: 0.0,
             height: 0.0,
@@ -414,6 +415,82 @@ fn layout_fenced(
         width: x,
         height: parent_height,
         depth: parent_depth,
+        kind: BoxKind::HBox(children),
+    }
+}
+
+/// Layout an accent (`\hat`, `\vec`, …): center the combining-accent glyph
+/// horizontally over the body and raise it to sit just above the body's top.
+fn layout_accent(accent: crate::font::GlyphId, body: &Node, style: Style) -> Box {
+    use crate::font::{self, math_constant, MathConstant};
+
+    let body_box = layout(body, style);
+    let base_size = style.font_size(approx_base_font_size_from_node(body));
+
+    // Accent glyph geometry. Combining accents have zero advance; their visible
+    // width comes from the bounding box.
+    let am = font::glyph_metrics(accent, base_size);
+    let (ax_min, ax_max) = font::glyph_x_bounds(accent, base_size);
+    let accent_w = (ax_max - ax_min).max(0.0);
+
+    // Vertical: the accent's bottom should clear the body top by a small gap,
+    // but never sit lower than AccentBaseHeight (tall glyphs keep accents from
+    // floating too high). Gap = a thin slice of the em.
+    let accent_base = math_constant(MathConstant::AccentBaseHeight, base_size);
+    let gap = base_size * 0.06;
+    // How high above the body baseline the accent's baseline must sit so the
+    // accent glyph bottom clears the body top (or accent_base, whichever lower).
+    let body_top_above_baseline = body_box.height;
+    let clearance = body_top_above_baseline.max(accent_base) + gap;
+    // Accent glyph bottom (am.depth below its baseline). Raise the accent so its
+    // *bottom* lands at `clearance` above the body baseline.
+    let accent_baseline_rise = clearance + am.depth;
+
+    let width = body_box.width;
+    let body_center = width / 2.0;
+
+    // Accent glyph paths carry their own x coordinates (often negative for
+    // combining forms). To center the glyph's bbox over the body center, the
+    // glyph origin lands at body_center - (bbox midpoint).
+    let accent_bbox_center = (ax_min + ax_max) / 2.0;
+    let accent_origin_x = body_center - accent_bbox_center;
+
+    let accent_box = Box {
+        width: accent_w,
+        height: am.height,
+        depth: am.depth,
+        kind: BoxKind::Glyph {
+            glyph_id: accent,
+            font_size: base_size,
+        },
+    };
+
+    // y-down: parent baseline at y = parent_height. A child at offset.y has its
+    // glyph baseline at offset.y + child.height.
+    let body_depth = body_box.depth;
+    let body_h = body_box.height;
+    let parent_height = body_h.max(accent_baseline_rise + am.height);
+    let body_y = parent_height - body_h;
+    let accent_y = parent_height - accent_baseline_rise - am.height;
+
+    let children = vec![
+        Child {
+            offset: Point { x: 0.0, y: body_y },
+            child: body_box,
+        },
+        Child {
+            offset: Point {
+                x: accent_origin_x,
+                y: accent_y,
+            },
+            child: accent_box,
+        },
+    ];
+
+    Box {
+        width,
+        height: parent_height,
+        depth: body_depth,
         kind: BoxKind::HBox(children),
     }
 }
@@ -756,6 +833,7 @@ fn approx_base_font_size_from_node(n: &Node) -> f32 {
         Node::Radical { body, .. } => approx_base_font_size_from_node(body),
         Node::Fenced { body, .. } => approx_base_font_size_from_node(body),
         Node::OpName { body, .. } => approx_base_font_size_from_node(body),
+        Node::Accent { body, .. } => approx_base_font_size_from_node(body),
         _ => 16.0,
     }
 }
@@ -765,9 +843,11 @@ fn atom_class(node: &Node) -> Option<crate::ir::AtomClass> {
         Node::Atom { class, .. } => Some(*class),
         Node::Op { .. } | Node::OpName { .. } => Some(crate::ir::AtomClass::Op),
         Node::Fenced { .. } => Some(crate::ir::AtomClass::Inner),
-        Node::Frac { .. } | Node::Radical { .. } | Node::Subsup { .. } | Node::Row(_) => {
-            Some(crate::ir::AtomClass::Ord)
-        }
+        Node::Frac { .. }
+        | Node::Radical { .. }
+        | Node::Subsup { .. }
+        | Node::Row(_)
+        | Node::Accent { .. } => Some(crate::ir::AtomClass::Ord),
         _ => None,
     }
 }
@@ -1047,6 +1127,31 @@ mod tests {
         assert!(with_op.width > tight.width,
             "\\sin x ({}) should exceed tight 'sinx' ({}) by Op spacing",
             with_op.width, tight.width);
+    }
+
+    // --- boxer_accents.rs ---
+    #[test]
+    fn hat_is_taller_than_bare_x() {
+        let x = layout(&parse::to_ir("x", 16.0, Style::Text).unwrap(), Style::Text);
+        let hat = layout(
+            &parse::to_ir(r"\hat{x}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!(hat.height > x.height,
+            "\\hat{{x}} ({}) must be taller than bare x ({}) — accent sits above",
+            hat.height, x.height);
+    }
+
+    #[test]
+    fn accent_does_not_change_body_width() {
+        // Accent is centered over the body; it must not widen the box.
+        let x = layout(&parse::to_ir("x", 16.0, Style::Text).unwrap(), Style::Text);
+        let hat = layout(
+            &parse::to_ir(r"\hat{x}", 16.0, Style::Text).unwrap(),
+            Style::Text,
+        );
+        assert!((hat.width - x.width).abs() < 0.01,
+            "accent width {} should equal body width {}", hat.width, x.width);
     }
 
     #[test]

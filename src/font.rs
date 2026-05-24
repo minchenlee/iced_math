@@ -28,6 +28,28 @@ pub fn glyph_id(ch: char) -> Option<GlyphId> {
     face().glyph_index(ch)
 }
 
+/// Map the character pulldown-latex emits for an accent (`^`, `→`, `~`, `‾`/`¯`,
+/// …) to the font's **combining** accent glyph (U+03xx / U+20D7). The combining
+/// glyphs are the correctly-proportioned over-accent forms (zero advance,
+/// designed to overlay), unlike the spacing chars pulldown surfaces. Returns
+/// `None` if the character isn't a recognized accent.
+pub fn accent_glyph(ch: char) -> Option<GlyphId> {
+    let combining = match ch {
+        '^' | '\u{0302}' | 'ˆ' => '\u{0302}',  // \hat
+        '~' | '\u{0303}' | '˜' => '\u{0303}',  // \tilde
+        '‾' | '¯' | '\u{0304}' => '\u{0304}', // \bar (¯ = U+00AF)
+        '→' | '\u{20D7}' => '\u{20D7}',        // \vec
+        '˙' | '\u{0307}' => '\u{0307}',        // \dot
+        '¨' | '\u{0308}' => '\u{0308}',        // \ddot
+        'ˇ' | '\u{030C}' => '\u{030C}',        // \check
+        '˘' | '\u{0306}' => '\u{0306}',        // \breve
+        '´' | '\u{0301}' => '\u{0301}',        // \acute
+        '`' | '\u{0300}' => '\u{0300}',        // \grave
+        _ => return None,
+    };
+    face().glyph_index(combining)
+}
+
 /// Pixel-space metrics for a glyph at a given font size.
 /// All values are in SVG-down y space; `height` is above baseline, `depth` below.
 #[derive(Debug, Clone, Copy)]
@@ -35,6 +57,19 @@ pub struct GlyphMetrics {
     pub advance: f32,
     pub height: f32,
     pub depth: f32,
+}
+
+/// Horizontal extent (`x_min`, `x_max`) of a glyph's outline in pixels at a
+/// given font size. Useful for glyphs whose advance is zero (combining accents),
+/// where the visible width comes from the bounding box, not the advance.
+/// Returns `(0.0, 0.0)` if the glyph has no outline.
+pub fn glyph_x_bounds(id: GlyphId, font_size: f32) -> (f32, f32) {
+    let face = face();
+    let scale = font_size / face.units_per_em() as f32;
+    match face.glyph_bounding_box(id) {
+        Some(b) => (b.x_min as f32 * scale, b.x_max as f32 * scale),
+        None => (0.0, 0.0),
+    }
 }
 
 pub fn glyph_metrics(id: GlyphId, font_size: f32) -> GlyphMetrics {
@@ -115,6 +150,7 @@ pub enum MathConstant {
     UpperLimitBaselineRiseMin,
     LowerLimitGapMin,
     LowerLimitBaselineDropMin,
+    AccentBaseHeight,
 }
 
 /// Read a MATH table constant, scaled to pixels at the given font size.
@@ -166,6 +202,7 @@ pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
         UpperLimitBaselineRiseMin => consts.upper_limit_baseline_rise_min().value,
         LowerLimitGapMin => consts.lower_limit_gap_min().value,
         LowerLimitBaselineDropMin => consts.lower_limit_baseline_drop_min().value,
+        AccentBaseHeight => consts.accent_base_height().value,
     };
     value as f32 * scale
 }

@@ -106,9 +106,32 @@ fn parse_element(
             Ok(Some(Node::Row(inner)))
         }
         Event::End => Err(ParseError("unexpected End outside group".into())),
-        Event::Script { ty, .. } => {
+        Event::Script { ty, position } => {
             let base = parse_element(events, cursor, font_size, style)?
                 .ok_or_else(|| ParseError("script base produced no node".into()))?;
+
+            // Accents arrive as `Script{Superscript, AboveBelow}` where the
+            // "superscript" element is the accent glyph (e.g. `→` for \vec). Turn
+            // that into a centered over-accent instead of a raised superscript.
+            if matches!(ty, ScriptType::Superscript)
+                && matches!(position, pulldown_latex::event::ScriptPosition::AboveBelow)
+            {
+                if let Some(ch) = peek_accent_char(events, *cursor) {
+                    if let Some(accent) = font::accent_glyph(ch) {
+                        // Consume the accent glyph event directly. We must NOT route
+                        // it through parse_element: the spacing accent chars (e.g.
+                        // `‾` U+203E for \bar) have no standalone glyph and would
+                        // error in atom_node. We've already remapped to the combining
+                        // glyph above.
+                        *cursor += 1;
+                        return Ok(Some(Node::Accent {
+                            accent,
+                            body: Box::new(base),
+                        }));
+                    }
+                }
+            }
+
             let (sub, sup) = match ty {
                 ScriptType::Subscript => {
                     let s = parse_element(events, cursor, font_size, style)?
@@ -236,6 +259,17 @@ fn large_op_node(ch: char, small: bool, font_size: f32, style: Style) -> Result<
 /// `GlyphId(0)`, the sentinel the boxer treats as an invisible delimiter.
 fn delim_glyph(ch: Option<char>) -> GlyphId {
     ch.and_then(font::glyph_id).unwrap_or(GlyphId(0))
+}
+
+/// Peek the character of the accent element at `idx` (the element following an
+/// `AboveBelow` superscript). The accent surfaces as a single-character
+/// `Content` event; returns its char, or `None` if it isn't a bare char.
+fn peek_accent_char(events: &[Event], idx: usize) -> Option<char> {
+    match events.get(idx)? {
+        Event::Content(Content::Ordinary { content, .. }) => Some(*content),
+        Event::Content(Content::BinaryOp { content, .. }) => Some(*content),
+        _ => None,
+    }
 }
 
 /// LaTeX operators that stack their scripts as limits (`\DeclareMathOperator*`).
@@ -535,6 +569,38 @@ mod tests {
             panic!("expected OpName, got {:?}", items[0])
         };
         assert!(*limits, "\\lim must be a limit operator");
+    }
+
+    // --- parse_accents.rs ---
+    #[test]
+    fn hat_parses_as_accent_over_body() {
+        let ir = to_ir(r"\hat{x}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        let Node::Accent { body, .. } = &items[0] else {
+            panic!("expected Accent, got {:?}", items[0])
+        };
+        // body is the Row wrapping x
+        assert!(matches!(body.as_ref(), Node::Row(_) | Node::Atom { .. }));
+    }
+
+    #[test]
+    fn bar_with_no_spacing_glyph_still_parses() {
+        // \bar emits U+203E (overline) which has no standalone glyph; the accent
+        // path must remap to the combining macron and never hit atom_node.
+        let ir = to_ir(r"\bar{y}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert!(matches!(items[0], Node::Accent { .. }));
+    }
+
+    #[test]
+    fn vec_parses_as_accent_not_superscript() {
+        let ir = to_ir(r"\vec{B}", 16.0, Style::Text).unwrap();
+        let Node::Row(items) = ir else { panic!() };
+        assert!(
+            matches!(items[0], Node::Accent { .. }),
+            "\\vec must be an Accent, not a Subsup: got {:?}",
+            items[0]
+        );
     }
 
     #[test]

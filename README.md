@@ -83,13 +83,13 @@ between minor versions.
 - Square roots: `\sqrt{x}`, `\sqrt[n]{x}`
 - Large operators with limits: `\sum`, `\int`, `\prod` (display style places limits above/below)
 - Named operators: `\sin`, `\cos`, `\log`, … (upright, tight-set) and limit operators `\lim`, `\max`, `\min`, `\sup`, `\inf`, … (subscript stacks underneath in display style)
+- Accents: `\hat`, `\bar`, `\vec`, `\tilde`, `\dot`, `\ddot`, `\check`, `\breve`, `\acute`, `\grave` (centered over the body)
 - Delimiters: `\left( … \right)`, `\left[ … \right]` with auto-sizing variants
 
 ## Not yet supported (deferred to later releases)
 
 Roughly ordered by planned priority:
 
-- Accents (`\hat`, `\bar`, `\vec`, `\tilde`) — currently render misplaced (e.g. `\vec{B}` shows the arrow as a superscript); proper over-accent stacking pending
 - Matrices, `aligned`, `cases`, multiline environments — currently parsed then dropped (render as nothing)
 - `GlyphAssembly` for extra-tall delimiters — `\left( … \right)` won't grow past the largest single glyph
 - Binomials (`\binom{n}{k}`) — currently drawn with a fraction rule; should be ruleless
