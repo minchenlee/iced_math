@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0] - 2026-05-24
+### Added
+- `MathRenderer` — a low-level, Iced-free builder (`new`, `font_size`, `display_style`, `color`, `to_svg`) that renders LaTeX to standalone SVG bytes for server-side rendering, export, docs, or tests.
+- Public `Color` type (`Color::BLACK`, `Color::rgb`) for setting the glyph fill.
+- Public `Error` type (`Parse`, `InvalidFontSize`) implementing `Display`, `std::error::Error`, and `PartialEq`. `MathRenderer::to_svg` validates the font size (must be finite and strictly positive) before rendering.
+- Glyph color support: non-default colors wrap the body in a single inheriting `<g fill>` group; the default (black) output is byte-for-byte unchanged.
+
+### Changed
+- **Breaking:** the internal modules `boxer`, `font`, `ir`, `parse`, `spacing`, and `svg` are now private. The supported public API for the 0.x series is `inline`, `block`, `MathRenderer`, `Color`, and `Error`.
+- **Breaking:** the library no longer enables iced's `x11` feature. It keeps `thread-pool` (iced requires an executor at compile time) but leaves Linux windowing to consumers; the `viewer` example re-adds `x11` as a dev-dependency.
+- Expanded README (full Iced view example, raw-SVG `to_svg` example, stable-API note) and added rustdoc examples.
+
 ## [0.1.1] - 2026-05-24
 ### Fixed
 - Fraction rule now stays visible on narrow content (e.g. `\frac{1}{2}`) via a small horizontal overhang.
