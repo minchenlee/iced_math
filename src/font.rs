@@ -204,3 +204,147 @@ pub fn outline_path(id: GlyphId) -> String {
     let _ = face().outline_glyph(id, &mut b);
     b.0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- font_smoke.rs ---
+    #[test]
+    fn face_loads_and_has_math_table() {
+        let upem = units_per_em();
+        assert!(upem > 0.0, "units_per_em should be > 0, got {}", upem);
+        assert!(has_math_table(), "bundled font must have MATH table");
+    }
+
+    // --- font_glyph.rs ---
+    #[test]
+    fn maps_ascii_letter_to_glyph_id() {
+        let id = glyph_id('E').expect("E must exist in bundled math font");
+        assert!(id.0 > 0);
+    }
+
+    #[test]
+    fn maps_greek_alpha() {
+        let id = glyph_id('α').expect("α must exist");
+        assert!(id.0 > 0);
+    }
+
+    #[test]
+    fn returns_none_for_unmapped_codepoint() {
+        assert!(glyph_id('\u{E000}').is_none());
+    }
+
+    // --- font_metrics.rs ---
+    #[test]
+    fn metrics_for_capital_e() {
+        let id = glyph_id('E').unwrap();
+        let m = glyph_metrics(id, 16.0);
+        assert!(m.advance > 0.0);
+        assert!(m.height > 0.0);
+        assert!(m.depth >= 0.0);
+        assert!(m.height > m.depth);
+    }
+
+    #[test]
+    fn metrics_scale_linearly_with_size() {
+        let id = glyph_id('E').unwrap();
+        let m1 = glyph_metrics(id, 10.0);
+        let m2 = glyph_metrics(id, 20.0);
+        let ratio = m2.advance / m1.advance;
+        assert!(
+            (ratio - 2.0).abs() < 1e-3,
+            "expected 2.0 ratio, got {}",
+            ratio
+        );
+    }
+
+    // --- font_math_table.rs ---
+    #[test]
+    fn reads_axis_height() {
+        let h = math_constant(MathConstant::AxisHeight, 16.0);
+        assert!(
+            h > 0.0 && h < 16.0,
+            "AxisHeight should be small positive px, got {}",
+            h
+        );
+    }
+
+    #[test]
+    fn reads_fraction_rule_thickness() {
+        let t = math_constant(MathConstant::FractionRuleThickness, 16.0);
+        assert!(
+            t > 0.0 && t < 2.0,
+            "FractionRuleThickness should be ~1px, got {}",
+            t
+        );
+    }
+
+    // --- font_math_variant.rs ---
+    #[test]
+    fn integral_has_bigger_variant() {
+        let id = glyph_id('∫').unwrap();
+        let (variant, advance) = math_variant_vertical(id, 1500.0)
+            .expect("integral must have a bigger vertical variant");
+        assert!(
+            variant != id,
+            "should return a different glyph for bigger size"
+        );
+        assert!(advance >= 1500.0);
+    }
+
+    #[test]
+    fn returns_none_for_atom_without_variants() {
+        let id = glyph_id('E').unwrap();
+        assert!(math_variant_vertical(id, 50.0).is_none());
+    }
+
+    #[test]
+    fn returns_largest_when_target_exceeds_all_variants() {
+        let id = glyph_id('∫').unwrap();
+        let (variant, h) = math_variant_vertical(id, 1e9)
+            .expect("should fall back to largest variant, not None");
+        assert!(
+            variant != id,
+            "should return a non-base variant; got base glyph"
+        );
+        assert!(
+            h > 1500.0,
+            "largest variant should be substantially bigger than base; got {}",
+            h,
+        );
+    }
+
+    // --- font_outline.rs ---
+    #[test]
+    fn outlines_capital_e_to_path_string() {
+        let id = glyph_id('E').unwrap();
+        let path = outline_path(id);
+        assert!(
+            path.contains('M'),
+            "path should contain at least one Move: {}",
+            path
+        );
+        assert!(
+            path.contains('L') || path.contains('C') || path.contains('Q'),
+            "path should contain at least one line/curve segment: {}",
+            path
+        );
+        assert!(
+            path.ends_with('Z') || path.contains("Z "),
+            "path should be closed: {}",
+            path
+        );
+    }
+
+    #[test]
+    fn outline_uses_design_units_no_scaling() {
+        let id = glyph_id('E').unwrap();
+        let path = outline_path(id);
+        let any_large = path
+            .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
+            .filter_map(|s| s.parse::<f32>().ok())
+            .any(|n| n.abs() > 50.0);
+        assert!(any_large, "expected design-unit magnitudes, got: {}", path);
+    }
+}
