@@ -19,6 +19,9 @@ insta = { version = "1", features = ["yaml", "glob"] }
 resvg = "0.46"
 tiny-skia = "0.11"
 criterion = "0.5"
+# Activates iced's renderer + windowing shell for the `viewer` example only.
+# The library itself stays renderer-agnostic (it merely emits SVG bytes).
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia"] }
 
 [lib]
 name = "iced_math"

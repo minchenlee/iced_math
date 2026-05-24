@@ -86,6 +86,10 @@ pub enum MathConstant {
     FractionRuleThickness,
     FractionNumDisplayStyleShiftUp,
     FractionDenomDisplayStyleShiftDown,
+    FractionNumeratorGapMin,
+    FractionNumDisplayStyleGapMin,
+    FractionDenominatorGapMin,
+    FractionDenomDisplayStyleGapMin,
     SubscriptShiftDown,
     SubscriptTopMax,
     SubscriptBaselineDropMin,
@@ -132,6 +136,10 @@ pub fn math_constant(c: MathConstant, font_size: f32) -> f32 {
         FractionDenomDisplayStyleShiftDown => {
             consts.fraction_denominator_display_style_shift_down().value
         }
+        FractionNumeratorGapMin => consts.fraction_numerator_gap_min().value,
+        FractionNumDisplayStyleGapMin => consts.fraction_num_display_style_gap_min().value,
+        FractionDenominatorGapMin => consts.fraction_denominator_gap_min().value,
+        FractionDenomDisplayStyleGapMin => consts.fraction_denom_display_style_gap_min().value,
         SubscriptShiftDown => consts.subscript_shift_down().value,
         SubscriptTopMax => consts.subscript_top_max().value,
         SubscriptBaselineDropMin => consts.subscript_baseline_drop_min().value,

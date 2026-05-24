@@ -586,17 +586,30 @@ fn layout_frac(num: &Node, den: &Node, style: Style) -> Box {
     let base = style.font_size(base_content);
     let rule_thickness = math_constant(MathConstant::FractionRuleThickness, base).max(0.5);
 
-    let (shift_up, shift_down) = if style.is_display() {
+    let (shift_up_pref, shift_down_pref, num_gap_min, den_gap_min) = if style.is_display() {
         (
             math_constant(MathConstant::FractionNumDisplayStyleShiftUp, base),
             math_constant(MathConstant::FractionDenomDisplayStyleShiftDown, base),
+            math_constant(MathConstant::FractionNumDisplayStyleGapMin, base),
+            math_constant(MathConstant::FractionDenomDisplayStyleGapMin, base),
         )
     } else {
         (
             math_constant(MathConstant::FractionNumeratorShiftUp, base),
             math_constant(MathConstant::FractionDenominatorShiftDown, base),
+            math_constant(MathConstant::FractionNumeratorGapMin, base),
+            math_constant(MathConstant::FractionDenominatorGapMin, base),
         )
     };
+
+    // The font's preferred shifts assume ordinary-height num/den. Tall
+    // content (e.g. a numerator containing \sqrt) would otherwise let the
+    // numerator's depth (or denominator's height) cross the rule. Enforce the
+    // MATH GapMin clearance between each child's ink and the rule edge, per
+    // the OpenType MATH / TeX fraction algorithm.
+    let half_rule = rule_thickness / 2.0;
+    let shift_up = shift_up_pref.max(n.depth + half_rule + num_gap_min);
+    let shift_down = shift_down_pref.max(d.height + half_rule + den_gap_min);
 
     // Parent baseline (y = parent.height) IS the math axis line.
     //   - num baseline sits at axis - shift_up (above the axis)
