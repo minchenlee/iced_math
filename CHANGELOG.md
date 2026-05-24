@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] - 2026-05-24
+### Added
+- **Matrices and tabular environments:** `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `Bmatrix`, `Vmatrix`, plus `cases`, `aligned`, and `array`. Per-column alignment, per-row ascent/descent, and the whole grid centered on the math axis so it lines up with surrounding relations. Enclosing delimiters (e.g. `pmatrix`'s parens) auto-size to the grid.
+- **Named operators:** `\sin`, `\cos`, `\log`, … render upright and tightly set (no inter-letter spacing) while spacing as a single operator against their argument. Limit operators (`\lim`, `\max`, `\min`, `\sup`, `\inf`, `\det`, `\gcd`, …) stack their subscript underneath in display style.
+- **Accents:** `\hat`, `\bar`, `\vec`, `\tilde`, `\dot`, `\ddot`, `\check`, `\breve`, `\acute`, `\grave`, centered horizontally over the body and raised above it (using the font's combining-accent glyphs and the MATH `AccentBaseHeight`).
+
+### Fixed
+- Function names (`\sin` etc.) no longer typeset as spaced italic ordinaries; `\bar` and other spacing-glyph accents no longer error or render as a raised superscript.
+
+### Changed
+- README "supported LaTeX" list updated; the Iced quickstart now compiles (binds `inline`/`block` to a typed `Element` and documents the turbofish fallback) and the install snippet enables iced's `svg` feature.
+
 ## [0.2.0] - 2026-05-24
 ### Added
 - `MathRenderer` — a low-level, Iced-free builder (`new`, `font_size`, `display_style`, `color`, `to_svg`) that renders LaTeX to standalone SVG bytes for server-side rendering, export, docs, or tests.
