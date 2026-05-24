@@ -3,3 +3,4 @@ Cargo.lock
 .DS_Store
 *.swp
 to_svg_out/
+.understand-anything/
