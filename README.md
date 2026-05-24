@@ -11,10 +11,17 @@ Pre-1.0 — API may change. v0.2 supports a Tier 1 LaTeX subset (~50 commands).
 ```toml
 [dependencies]
 iced_math = "0.2"
-iced = { version = "0.14", features = ["wgpu", "tiny-skia"] }
+# iced_math renders through iced's `svg` widget, so your iced dependency must
+# enable a renderer (`wgpu` and/or `tiny-skia`) plus the `svg` feature.
+iced = { version = "0.14", features = ["wgpu", "tiny-skia", "svg"] }
 ```
 
 ## Quickstart
+
+`inline` and `block` are generic over `Message`, `Theme`, and `Renderer`. The
+compiler infers those from the surrounding `Element` type, so bind each call to a
+typed `Element` (or annotate the `let`) — a bare call inside `column![ … ]` has
+nothing to infer from and will fail with a "type annotations needed" error.
 
 ```rust
 use iced::widget::column;
@@ -24,17 +31,23 @@ use iced::Element;
 enum Message {}
 
 fn view(_state: &()) -> Element<'_, Message> {
-    column![
-        // Inline (text-style): sits on a text baseline.
-        iced_math::inline("a^2 + b^2 = c^2"),
-        // Block (display style): centered, larger operators.
-        iced_math::block(r"\int_0^1 x^2 \, dx = \frac{1}{3}"),
-    ]
-    .into()
+    // Inline (text-style): sits on a text baseline.
+    let inline: Element<'_, Message> = iced_math::inline("a^2 + b^2 = c^2");
+    // Block (display style): centered, larger operators.
+    let block: Element<'_, Message> = iced_math::block(r"\int_0^1 x^2 \, dx = \frac{1}{3}");
+
+    column![inline, block].into()
 }
 ```
 
-See `examples/viewer.rs` for a full demo:
+If you can't bind to a typed `Element`, use the turbofish instead:
+
+```rust,ignore
+iced_math::inline::<Message, iced::Theme, iced::Renderer>("a^2 + b^2 = c^2")
+```
+
+A full runnable demo lives in `examples/viewer.rs` (the example enables iced's
+`wgpu`/`tiny-skia` renderer as a dev-dependency):
 
 ```bash
 cargo run --example viewer
@@ -61,7 +74,7 @@ For the `0.x` series the supported public API is: `inline`, `block`,
 `MathRenderer`, `Color`, and `Error`. Everything else is internal and may change
 between minor versions.
 
-## Supported LaTeX (v0.1)
+## Supported LaTeX (v0.2)
 
 - Atoms: letters, digits, basic operators (`+`, `−`, `×`, `÷`, `=`, `<`, `>`, `≤`, `≥`)
 - Greek: `\alpha` … `\omega`, `\Gamma` … `\Omega`
@@ -73,15 +86,17 @@ between minor versions.
 
 ## Not yet supported (deferred to later releases)
 
-- Matrices, `aligned`, `cases`, multiline environments — v0.2
-- Accents (`\hat`, `\bar`, `\vec`, `\tilde`) — currently render misplaced (e.g. `\vec{B}` shows the arrow as a superscript); proper over-accent stacking is v0.2
-- Binomials (`\binom{n}{k}`) — currently drawn with a fraction rule; the zero-thickness (open) binomial bar is v0.2
-- Named limit-operators (`\lim`, `\max`, `\min`, `\sup`, `\inf`) — subscript renders to the right instead of stacked underneath; v0.2
-- Multi-letter function names (`\sin`, `\cos`, `\log`, …) — currently typeset as spaced italic ordinaries instead of an upright, tightly-set operator; v0.2
-- Unary vs. binary `-`/`+` disambiguation — a leading unary minus gets binary spacing; v0.2
-- `GlyphAssembly` for extra-tall delimiters — v0.2
-- AMS alphabets (`\mathbb`, `\mathfrak`, `\mathcal`) — fall back to the regular glyph; v0.3
-- Sizing modes (`\scriptstyle`, `\displaystyle` overrides) — v0.3
+Roughly ordered by planned priority:
+
+- Multi-letter function names (`\sin`, `\cos`, `\log`, …) — currently typeset as spaced italic ordinaries instead of an upright, tightly-set operator
+- Named limit-operators (`\lim`, `\max`, `\min`, `\sup`, `\inf`) — subscript renders to the right instead of stacked underneath
+- Accents (`\hat`, `\bar`, `\vec`, `\tilde`) — currently render misplaced (e.g. `\vec{B}` shows the arrow as a superscript); proper over-accent stacking pending
+- Matrices, `aligned`, `cases`, multiline environments — currently parsed then dropped (render as nothing)
+- `GlyphAssembly` for extra-tall delimiters — `\left( … \right)` won't grow past the largest single glyph
+- Binomials (`\binom{n}{k}`) — currently drawn with a fraction rule; should be ruleless
+- Unary vs. binary `-`/`+` disambiguation — a leading unary minus gets binary spacing
+- AMS alphabets (`\mathbb`, `\mathfrak`, `\mathcal`) — fall back to the regular glyph
+- Sizing modes (`\scriptstyle`, `\displaystyle` overrides)
 
 ## How it works
 
