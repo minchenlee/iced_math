@@ -1,4 +1,4 @@
-use iced_math::{boxer, ir::Style, parse, svg};
+use iced_math::{boxer, ir::Style, parse, svg, Color};
 use std::fs;
 
 fn rasterize_svg(svg_bytes: &[u8], scale: f32) -> Vec<u8> {
@@ -30,7 +30,7 @@ fn pixel_snapshots() {
         };
         let ir = parse::to_ir(src, 16.0, style).expect("parse must succeed for corpus");
         let b = boxer::layout(&ir, style);
-        let svg_bytes = svg::emit(&b);
+        let svg_bytes = svg::emit(&b, Color::BLACK);
         let png = rasterize_svg(&svg_bytes, 4.0);
         insta::assert_binary_snapshot!(&format!("{stem}.png")[..], png);
     });

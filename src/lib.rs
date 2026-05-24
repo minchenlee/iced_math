@@ -63,7 +63,7 @@ where
     match parse::to_ir(src, 16.0, style) {
         Ok(ir) => {
             let b = boxer::layout(&ir, style);
-            let bytes = svg::emit(&b);
+            let bytes = svg::emit(&b, crate::Color::BLACK);
             widget::from_svg(bytes)
         }
         Err(_) => widget::error_fallback(src.to_string()),

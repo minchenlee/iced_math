@@ -1,4 +1,4 @@
-use iced_math::{boxer, ir::Style, parse, svg};
+use iced_math::{boxer, ir::Style, parse, svg, Color};
 use std::fs;
 
 #[test]
@@ -18,7 +18,7 @@ fn svg_snapshots() {
         };
         let ir = parse::to_ir(src, 16.0, style).expect("parse must succeed for corpus");
         let b = boxer::layout(&ir, style);
-        let bytes = svg::emit(&b);
+        let bytes = svg::emit(&b, Color::BLACK);
         let s = String::from_utf8(bytes).expect("svg bytes must be utf-8");
         insta::assert_snapshot!(stem, s);
     });

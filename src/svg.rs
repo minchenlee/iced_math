@@ -11,7 +11,7 @@ use crate::font;
 /// the box edge (e.g. a fraction denominator, depth ≈ 0) gets clipped.
 const PAD: f32 = 1.0;
 
-pub fn emit(root: &MBox) -> Vec<u8> {
+pub fn emit(root: &MBox, fill: crate::Color) -> Vec<u8> {
     let w = root.width.max(0.0) + 2.0 * PAD;
     let h = (root.height + root.depth).max(0.0) + 2.0 * PAD;
     let mut out = String::new();
@@ -21,7 +21,16 @@ pub fn emit(root: &MBox) -> Vec<u8> {
         w = w,
         h = h
     );
+    // Default black → emit exactly as before (no group, no fill attr) so existing
+    // snapshots are unchanged. Non-default → one inheriting <g fill> wrapper.
+    let wrap = fill != crate::Color::BLACK;
+    if wrap {
+        let _ = write!(&mut out, r#"<g fill="{}">"#, fill.hex());
+    }
     walk(&mut out, root, Point { x: PAD, y: PAD });
+    if wrap {
+        out.push_str("</g>");
+    }
     out.push_str("</svg>");
     out.into_bytes()
 }
