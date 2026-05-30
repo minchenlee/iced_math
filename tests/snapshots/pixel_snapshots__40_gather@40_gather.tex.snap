@@ -1,0 +1,8 @@
+---
+source: tests/pixel_snapshots.rs
+assertion_line: 31
+expression: png
+input_file: tests/corpus/40_gather.tex
+extension: png
+snapshot_kind: binary
+---

@@ -338,8 +338,20 @@ fn matrix_col_aligns(g: &Grouping) -> Option<Vec<ColAlign>> {
         Grouping::SubArray { alignment } => Some(vec![col_align(*alignment)]),
         // cases / rcases: two left-aligned columns (value, condition).
         Grouping::Cases { .. } => Some(vec![ColAlign::Left, ColAlign::Left]),
-        // aligned / split: right, left, right, left … pairs.
-        Grouping::Aligned | Grouping::Split => Some(vec![ColAlign::Right, ColAlign::Left]),
+        // aligned / split / align / alignat: right, left, right, left … pairs.
+        // The document-level `align`/`alignat`(`alignedat`) environments lay out
+        // identically to `aligned`; only their numbering differs (which we drop).
+        Grouping::Aligned
+        | Grouping::Split
+        | Grouping::Align { .. }
+        | Grouping::Alignat { .. }
+        | Grouping::Alignedat { .. } => Some(vec![ColAlign::Right, ColAlign::Left]),
+        // gather(ed) / equation / multline: a single centered column, one row per
+        // `\\`. `equation`/`multline` are usually one row but must still parse.
+        Grouping::Gather { .. }
+        | Grouping::Gathered
+        | Grouping::Equation { .. }
+        | Grouping::Multline => Some(vec![ColAlign::Center]),
         Grouping::Array(cols) => {
             let aligns: Vec<ColAlign> = cols
                 .iter()
@@ -833,6 +845,92 @@ mod tests {
         };
         assert_eq!(rows.len(), 2);
         assert_eq!(col_aligns[0], ColAlign::Left);
+    }
+
+    // --- multiline display environments (align/gather/equation/multline) ---
+    // pulldown-latex emits dedicated Grouping variants for these; matrix_col_aligns
+    // must recognize them so their `&`/`\\` flow builds a multi-row grid instead of
+    // collapsing to one line (the EnvironmentFlow events get dropped otherwise).
+    fn matrix_rows(ir: &Node) -> &Vec<Vec<Node>> {
+        let Node::Row(items) = ir else {
+            panic!("expected outer Row, got {ir:?}")
+        };
+        match &items[0] {
+            Node::Matrix { rows, .. } => rows,
+            other => panic!("expected Matrix, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn align_builds_multi_row_grid() {
+        let ir = to_ir(
+            r"\begin{align} a &= b \\ c &= d \end{align}",
+            16.0,
+            Style::Display,
+        )
+        .unwrap();
+        let rows = matrix_rows(&ir);
+        assert_eq!(rows.len(), 2, "two equation rows");
+        assert_eq!(rows[0].len(), 2, "lhs & rhs columns");
+    }
+
+    #[test]
+    fn align_star_builds_multi_row_grid() {
+        let ir = to_ir(
+            r"\begin{align*} a &= b \\ c &= d \end{align*}",
+            16.0,
+            Style::Display,
+        )
+        .unwrap();
+        assert_eq!(matrix_rows(&ir).len(), 2);
+    }
+
+    #[test]
+    fn gather_builds_multi_row_grid() {
+        let ir = to_ir(
+            r"\begin{gather} a = b \\ c = d \end{gather}",
+            16.0,
+            Style::Display,
+        )
+        .unwrap();
+        let rows = matrix_rows(&ir);
+        assert_eq!(rows.len(), 2, "two gathered rows");
+        assert_eq!(rows[0].len(), 1, "single centered column");
+    }
+
+    #[test]
+    fn equation_wraps_single_row() {
+        // `equation` is single-line but must parse without dropping content.
+        let ir = to_ir(
+            r"\begin{equation} a = b \end{equation}",
+            16.0,
+            Style::Display,
+        )
+        .unwrap();
+        let rows = matrix_rows(&ir);
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[test]
+    fn multline_builds_multi_row_grid() {
+        let ir = to_ir(
+            r"\begin{multline} a + b \\ + c + d \end{multline}",
+            16.0,
+            Style::Display,
+        )
+        .unwrap();
+        assert_eq!(matrix_rows(&ir).len(), 2);
+    }
+
+    #[test]
+    fn alignat_builds_multi_row_grid() {
+        let ir = to_ir(
+            r"\begin{alignat}{2} a &= b & c &= d \\ e &= f & g &= h \end{alignat}",
+            16.0,
+            Style::Display,
+        )
+        .unwrap();
+        assert_eq!(matrix_rows(&ir).len(), 2);
     }
 
     // --- parse_accents.rs ---
