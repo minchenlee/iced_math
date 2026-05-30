@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.0] - 2026-05-30
+### Added
+- **Multiline display environments:** `align`, `align*`, `gather`, `gather*`, `equation`, `equation*`, `multline`, `alignat`, `alignedat`. Previously only the inner `aligned`/`split`/`cases`/`matrix`/`array` grids were recognized, so these document-level environments fell through to the unknown-grouping path and their `&` column / `\\` row separators were silently dropped — collapsing every multi-line derivation onto a single line with no error. `align`/`alignat`/`alignedat` lay out as right/left aligned pairs (matching `aligned`); `gather`/`gathered`/`equation`/`multline` as a single centered column.
+
 ## [0.4.0] - 2026-05-24
 ### Added
 - **Math alphabets:** `\mathbb`, `\mathcal`, `\mathfrak`, `\mathbf`, `\mathsf`, `\mathtt`, `\mathit` (and the bold/sans/italic combinations pulldown-latex distinguishes). Letters and digits remap to their Unicode math-alphanumeric codepoints (e.g. `\mathbb{R}` → ℝ, `\mathcal{L}` → ℒ). The font state applies across a braced group and is correctly scoped — it does not leak past the group and resets across matrix cell/row boundaries. A character with no styled glyph in the bundled font falls back to its plain form.
